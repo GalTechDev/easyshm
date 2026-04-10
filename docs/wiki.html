@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EasySHM Wiki | Documentation</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-logo" style="text-decoration: none;">
+                <i class="ri-flashlight-line" style="color: var(--accent-green)"></i> EasySHM <span class="badge-v">Wiki</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="index.html" data-en="Home" data-fr="Accueil">Home</a></li>
+                <li><a href="https://github.com/GalTechDev/easyshm" target="_blank"><i class="ri-github-fill"></i> GitHub</a></li>
+                <li>
+                    <button onclick="toggleLang()" id="lang-btn" class="lang-toggle">FR</button>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container wiki-layout">
+        <aside class="wiki-sidebar">
+            <div class="wiki-sidebar-title" data-en="API Core" data-fr="Cœur de l'API">API Core</div>
+            <ul>
+                <li><a href="#easyshm-class" class="wiki-sidebar-link active" data-en="EasySHM Class" data-fr="Classe EasySHM">EasySHM Class</a></li>
+                <li><a href="#numpy" class="wiki-sidebar-link" data-en="NumPy Integration" data-fr="Intégration NumPy">NumPy Integration</a></li>
+                <li><a href="#signaling" class="wiki-sidebar-link" data-en="Process Signaling" data-fr="Signalisation">Process Signaling</a></li>
+            </ul>
+
+            <div class="wiki-sidebar-title" data-en="Platform" data-fr="Plateforme">Platform</div>
+            <ul>
+                <li><a href="#windows" class="wiki-sidebar-link" data-en="Windows Details" data-fr="Détails Windows">Windows Details</a></li>
+                <li><a href="#linux" class="wiki-sidebar-link" data-en="Linux Details" data-fr="Détails Linux">Linux Details</a></li>
+            </ul>
+        </aside>
+
+        <main class="wiki-content">
+            <section id="easyshm-class" class="wiki-section">
+                <h2 data-en="The EasySHM Class" data-fr="La Classe EasySHM">The EasySHM Class</h2>
+                <p data-en="The main entry point for creating or joining a shared memory segment." data-fr="Le point d'entrée principal pour créer ou joindre un segment de mémoire partagée.">The main entry point for EasySHM.</p>
+                
+                <div class="terminal">
+                    <div class="terminal-body">
+                        <span class="kw">from</span> easyshm <span class="kw">import</span> EasySHM<br><br>
+                        <span class="comment"># Create segment (1MB)</span><br>
+                        shm = <span class="func">EasySHM</span>(<span class="str">"shared_bus"</span>, size=<span class="num">1024*1024</span>)<br><br>
+                        <span class="comment"># Write raw bytes</span><br>
+                        shm.<span class="func">write</span>(<span class="str">b"Hello RAM!"</span>, offset=<span class="num">0</span>)<br><br>
+                        <span class="comment"># Read raw bytes</span><br>
+                        data = shm.<span class="func">read</span>(size=<span class="num">10</span>, offset=<span class="num">0</span>)
+                    </div>
+                </div>
+            </section>
+
+            <section id="numpy" class="wiki-section">
+                <h2 data-en="NumPy Integration" data-fr="Intégration NumPy">NumPy Integration</h2>
+                <p data-en="EasySHM supports zero-copy views for NumPy arrays. Any change made to the array is immediately visible to other processes."
+                   data-fr="EasySHM supporte les vues 'zéro-copie' pour les tableaux NumPy. Tout changement dans le tableau est immédiatement visible par les autres processus.">
+                    EasySHM supports zero-copy views for NumPy arrays.
+                </p>
+                <div class="terminal">
+                    <div class="terminal-body">
+                        arr = shm.<span class="func">as_ndarray</span>(shape=(<span class="num">1920</span>, <span class="num">1080</span>, <span class="num">3</span>), dtype=<span class="str">'uint8'</span>)<br>
+                        arr[:] = <span class="num">255</span> <span class="comment"># Instantly white screen for all processes!</span>
+                    </div>
+                </div>
+            </section>
+
+            <section id="signaling" class="wiki-section">
+                <h2 data-en="Process Signaling" data-fr="Signalisation Inter-processus">Process Signaling</h2>
+                <p data-en="Instead of polling the memory, you can wait for a wake-up signal from another process."
+                   data-fr="Au lieu de scruter la mémoire en boucle, vous pouvez attendre un signal de réveil d'un autre processus.">
+                    Instead of polling, wait for a signal.
+                </p>
+                <div class="terminal">
+                    <div class="terminal-body">
+                        <span class="kw">if</span> shm.<span class="func">wait_update</span>(timeout=<span class="num">5.0</span>):<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;print(<span class="str">"Data updated!"</span>)
+                    </div>
+                </div>
+            </section>
+
+            <!-- ADVANCED VIEWS -->
+            <section id="views" class="wiki-section">
+                <h2 data-en="Advanced Views (Extensible Registry)" data-fr="Vues Avancées (Registre Extensible)">Advanced Views</h2>
+                <p data-en="The <code>as_view()</code> system allows you to map complex Python objects directly over the shared memory segment without any copy."
+                   data-fr="Le système <code>as_view()</code> vous permet de mapper des objets Python complexes directement sur le segment de mémoire partagée sans aucune copie.">
+                    Map complex Python objects directly over shared memory.
+                </p>
+                
+                <h3 data-en="Why use SHM?" data-fr="Pourquoi utiliser le SHM ?">Why use SHM?</h3>
+                <table class="perf-table">
+                    <thead>
+                        <tr>
+                            <th data-en="Feature" data-fr="Fonctionnalité">Feature</th>
+                            <th>TCP Network</th>
+                            <th>EasySHM</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td data-en="Baseline Latency" data-fr="Latence de base">Baseline Latency</td>
+                            <td>~1.0ms - 2.0ms</td>
+                            <td class="perf-val">&lt; 0.08ms</td>
+                        </tr>
+                        <tr>
+                            <td data-en="10MB Sync" data-fr="Sync de 10Mo">10MB Sync</td>
+                            <td>~0.10s</td>
+                            <td class="perf-val">~0.07s</td>
+                        </tr>
+                        <tr>
+                            <td data-en="CPU Usage" data-fr="Usage CPU">CPU Usage</td>
+                            <td>Moderate (TCP Stack)</td>
+                            <td class="perf-val">Near-Zero</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 data-en="Supported Types" data-fr="Types Supportés">Supported Types</h3>
+                <ul>
+                    <li><strong>numpy</strong>: Multi-dimensional arrays (Zero-Copy).</li>
+                    <li><strong>struct</strong>: C-style <code>ctypes.Structure</code>.</li>
+                    <li><strong>torch</strong>: CPU Tensors for AI workloads.</li>
+                </ul>
+
+                <h3 data-en="Custom C-Structure Example" data-fr="Exemple Structure C Personnalisée">Custom C-Structure Example</h3>
+                <div class="terminal">
+                    <div class="terminal-body">
+                        <span class="kw">class</span> Player(ctypes.Structure):<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;_fields_ = [(<span class="str">"x"</span>, ctypes.c_int), (<span class="str">"y"</span>, ctypes.c_int)]<br><br>
+                        p = shm.<span class="func">as_view</span>(<span class="str">"struct"</span>, type=Player)<br>
+                        p.x = <span class="num">100</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- WINDOWS SECTION -->
+            <section id="windows" class="wiki-section">
+                <h2 data-en="Windows Implementation" data-fr="Implémentation Windows">Windows Implementation</h2>
+                <p data-en="On Windows, EasySHM uses Named Events stored in the 'Local\\' session namespace. This allows communication between processes without admin rights."
+                   data-fr="Sur Windows, EasySHM utilise des 'Named Events' stockés dans l'espace de session 'Local\\'. Cela permet de communiquer sans droits administrateur.">
+                    On Windows, EasySHM uses Named Events in the 'Local\\' session namespace.
+                </p>
+                <div class="doc-alert">
+                    <i class="ri-windows-fill"></i>
+                    <span data-en="Signals are broadcast using PulseEvent, waking all waiting processes simultaneously."
+                          data-fr="Les signaux sont diffusés via PulseEvent, réveillant tous les processus en attente simultanément.">
+                        Signals are broadcast using PulseEvent.
+                    </span>
+                </div>
+            </section>
+
+            <!-- LINUX SECTION -->
+            <section id="linux" class="wiki-section">
+                <h2 data-en="Linux Implementation" data-fr="Implémentation Linux">Linux Implementation</h2>
+                <p data-en="On Linux, EasySHM creates memory-mapped files in <code>/dev/shm</code> (Shared Memory File System). It uses POSIX Semaphores for ultra-fast signaling."
+                   data-fr="Sur Linux, EasySHM crée des fichiers mappés en mémoire dans <code>/dev/shm</code>. Il utilise des Sémaphores POSIX pour une signalisation ultra-rapide.">
+                    EasySHM uses /dev/shm and POSIX Semaphores on Linux.
+                </p>
+                <div class="doc-alert doc-alert-tip">
+                    <i class="ri-terminal-window-line"></i>
+                    <span data-en="Tip: You can manually inspect shared segments by browsing to /dev/shm on your Linux machine."
+                          data-fr="Astuce : Vous pouvez inspecter manuellement les segments partagés en parcourant /dev/shm sur votre machine Linux.">
+                        You can manually inspect shared segments in /dev/shm.
+                    </span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-text">EasySHM — High-Performance Computing by GalTechDev</p>
+        </div>
+    </footer>
+
+    <script>
+        let currentLang = "en";
+        function toggleLang() {
+            currentLang = currentLang === "en" ? "fr" : "en";
+            document.getElementById("lang-btn").textContent = currentLang === "en" ? "FR" : "EN";
+            document.querySelectorAll("[data-en]").forEach(el => {
+                const text = el.getAttribute("data-" + currentLang);
+                if (text) el.innerHTML = text;
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EasySHM | High-Performance Shared Memory for Python</title>
+    <meta name="description" content="Zero-socket IPC with kernel signaling for ultra-fast Python communication.">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <nav class="nav">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="ri-flashlight-line" style="color: var(--accent-green)"></i> EasySHM <span class="badge-v">v0.1.0</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="wiki.html" data-en="Documentation" data-fr="Documentation">Documentation</a></li>
+                <li><a href="https://github.com/GalTechDev/easyshm" target="_blank"><i class="ri-github-fill"></i>
+                        GitHub</a></li>
+                <li>
+                    <button onclick="toggleLang()" id="lang-btn" class="lang-toggle">FR</button>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <section class="hero container">
+        <h1 class="hero-title" style="background: var(--gradient-tech); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">EasySHM</h1>
+        <p class="hero-subtitle"
+            data-en="Zero-socket IPC for Python. Share Giga-octets per second between processes with hardware-level latency."
+            data-fr="IPC Zéro-socket pour Python. Partagez des Giga-octets par seconde entre processus avec une latence matérielle.">
+            Zero-socket IPC for Python. Share Giga-octets per second between processes with hardware-level latency.
+        </p>
+        <div style="display: flex; gap: 1rem; justify-content: center;">
+            <button class="btn btn-primary"><i class="ri-terminal-line"></i> <span>pip install py-easyshm</span></button>
+            <a href="wiki.html" class="btn"><i class="ri-book-line"></i>
+                <span data-en="Read Wiki" data-fr="Lire le Wiki">Read Wiki</span></a>
+        </div>
+    </section>
+
+    <section class="container">
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-icon"><i class="ri-cpu-line"></i></div>
+                <h3 data-en="Hardware Performance" data-fr="Performance Matérielle">Hardware Performance</h3>
+                <p data-en="Bypass the network stack entirely. Communicate via direct RAM access with <0.05ms latency."
+                    data-fr="Contournez entièrement la pile réseau. Communiquez via accès direct à la RAM avec une latence <0.05ms.">
+                    Bypass the network stack entirely. Communicate via direct RAM access with <0.05ms latency.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="ri-pulse-line" style="color: var(--accent-green)"></i></div>
+                <h3 data-en="Kernel Signaling" data-fr="Signalisation Noyau">Kernel Signaling</h3>
+                <p data-en="Instant wake-ups using Win32 Events and POSIX Semaphores. No busy-waiting, zero CPU waste."
+                    data-fr="Réveil instantané via Win32 Events et Sémaphores POSIX. Pas de boucle d'attente, consommation CPU nulle.">
+                    Instant wake-ups using Win32 Events and POSIX Semaphores. No busy-waiting, zero CPU waste.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="ri-expand-diagonal-line" style="color: var(--accent-orange)"></i></div>
+                <h3 data-en="Auto-Grow Segments" data-fr="Segments Auto-Agrandissables">Auto-Grow Segments</h3>
+                <p data-en="Dynamic memory resizing that stays connected. Your buffer grows as your data expands."
+                    data-fr="Redimensionnement dynamique qui reste connecté. Votre buffer grandit selon vos besoins.">
+                    Dynamic memory resizing that stays connected. Your buffer grows as your data expands.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon"><i class="ri-table-line" style="color: var(--cloud-primary)"></i></div>
+                <h3 data-en="NumPy Zero-Copy" data-fr="NumPy Zero-Copy">NumPy Zero-Copy</h3>
+                <p data-en="Seamless integration with NumPy. View shared memory as an ndarray for instant mathematical operations."
+                    data-fr="Intégration native avec NumPy. Manipulez la mémoire partagée comme un ndarray pour des calculs instantanés.">
+                    Seamless integration with NumPy. View shared memory as an ndarray for instant mathematical operations.</p>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-text">EasySHM — High-Performance Computing by GalTechDev</p>
+        </div>
+    </footer>
+
+    <script>
+        let currentLang = "en";
+        function toggleLang() {
+            currentLang = currentLang === "en" ? "fr" : "en";
+            document.getElementById("lang-btn").textContent = currentLang === "en" ? "FR" : "EN";
+            document.querySelectorAll("[data-en]").forEach(el => {
+                const text = el.getAttribute("data-" + currentLang);
+                if (text) el.innerHTML = text;
+            });
+        }
+    </script>
+</body>
+</html>
