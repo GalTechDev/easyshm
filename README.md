@@ -2,7 +2,7 @@
 
 **High-Performance Shared Memory IPC for Python.**
 
-EasySHM is a zero-latency communication library that allows Python processes to share data directly through RAM. It bypasses the network stack (TCP/UDP) to achieve hardware-level speeds.
+EasySHM is a zero-latency communication library that allows Python processes to share data directly through RAM.
 
 ## Features ✨
 - **Zero-Socket IPC**: No open ports, no network overhead.
