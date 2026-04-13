@@ -1,39 +1,30 @@
-"""
-EasySHM — High-Performance Cross-Platform Shared Memory
-=========================================================
-A Python library for zero-socket, zero-admin inter-process communication
-using OS-level shared memory and kernel signals.
-
-Usage:
-    # Process A (writer)
-    shm = EasySHM("my_buffer", size=4096)
-    shm.write(b"Hello from Process A!")
-
-    # Process B (reader)
-    shm = EasySHM("my_buffer")
-    shm.on_update(lambda: print("Got:", shm.read()))
-
-Supports:
-    - Dynamic resizing (auto_grow)
-    - Zero-copy NumPy integration (as_ndarray)
-    - Kernel-level signaling (no sockets, no polling)
-    - Windows (kernel32 Events) and Linux (POSIX Semaphores)
-"""
-
+import sys
+import os
 import struct
 import threading
 import time
-from typing import Any
+import zlib
+import glob
+from typing import Any, List, Dict
 
 from .segment import Segment
-from .platform import Signal
+from .platform import Signal, Mutex
+
+
+class LockAbandonedError(Exception):
+    """Raised when an IPC Mutex is acquired but was abandoned by a crashed process."""
+    pass
+
+
+class ProtocolIncompatibilityError(Exception):
+    """Raised when the existing segment has an incompatible protocol version."""
+    pass
 from .views import ViewRegistry
 
-__all__ = ["EasySHM"]
-__version__ = "0.1.0"
+__all__ = ["EasySHM", "LockAbandonedError", "ProtocolIncompatibilityError"]
 
-
-# --- Control Segment Header Layout (64 bytes) ---
+# Header Layout (256 bytes)
+# ========================
 # All fields are little-endian.
 #
 #   Offset  Size  Type     Field
@@ -44,21 +35,38 @@ __version__ = "0.1.0"
 #   16      8     uint64   capacity      — allocated capacity of the active data segment
 #   24      4     uint32   write_seq     — monotonic counter, incremented on every write
 #   28      4     uint32   flags         — reserved
-#   32      32    bytes    reserved
-#   TOTAL = 64 bytes
+#   32      4     uint32   checksum      — CRC32 of the header
+#   36      4     uint32   reserved      — padding
+#   TOTAL = 40 bytes used (out of 256)
 
 _CTRL_SIZE = 256  # Over-allocate for future extensions
-_HEADER_FORMAT = "<4sIQQII"
-_HEADER_SIZE = struct.calcsize(_HEADER_FORMAT)  # 32 bytes
+_PROTOCOL_VERSION = 1
+_HEADER_FORMAT = "<4sIQQIIII"
+_HEADER_SIZE = struct.calcsize(_HEADER_FORMAT)  # 40 bytes
 _MAGIC = b"ESHM"
 
 
+def _calculate_checksum(raw_header):
+    # Calculate CRC32 on everything except the last 4 bytes (the checksum field)
+    return zlib.crc32(raw_header[:_HEADER_SIZE - 4]) & 0xFFFFFFFF
+
+
 def _pack_header(seg_version, data_size, capacity, write_seq, flags=0):
-    return struct.pack(_HEADER_FORMAT, _MAGIC, seg_version, data_size, capacity, write_seq, flags)
+    # Pack without checksum first
+    raw = struct.pack(_HEADER_FORMAT, _MAGIC, seg_version, data_size, capacity, write_seq, flags, _PROTOCOL_VERSION, 0)
+    # Calculate and insert checksum
+    checksum = _calculate_checksum(raw)
+    return struct.pack(_HEADER_FORMAT, _MAGIC, seg_version, data_size, capacity, write_seq, flags, _PROTOCOL_VERSION, checksum)
 
 
 def _unpack_header(raw):
-    magic, seg_version, data_size, capacity, write_seq, flags = struct.unpack(_HEADER_FORMAT, raw[:_HEADER_SIZE])
+    magic, seg_version, data_size, capacity, write_seq, flags, proto_ver, checksum = struct.unpack(_HEADER_FORMAT, raw[:_HEADER_SIZE])
+    
+    # Verify checksum
+    actual_checksum = _calculate_checksum(raw[:_HEADER_SIZE])
+    if checksum != actual_checksum:
+        raise ValueError(f"Header checksum mismatch: expected {checksum:08x}, got {actual_checksum:08x}")
+        
     return {
         "magic": magic,
         "seg_version": seg_version,
@@ -66,6 +74,8 @@ def _unpack_header(raw):
         "capacity": capacity,
         "write_seq": write_seq,
         "flags": flags,
+        "protocol_version": proto_ver,
+        "checksum": checksum,
     }
 
 
@@ -81,11 +91,35 @@ class EasySHM:
                     buffer when data exceeds the current capacity.
     """
 
-    def __init__(self, name: str, size: int = 4096, auto_grow: bool = True):
+    def __init__(
+        self,
+        name: str,
+        size: int = 4096,
+        auto_grow: bool = True,
+        auto_shrink: bool = False,
+        mode: int = 0o600,
+        auto_recover_mutex: bool = True,
+        pinned: bool = False,
+        on_pin_fail: str = "error"
+    ):
         self.name = name
         self.auto_grow = auto_grow
-        self._lock = threading.Lock()
+        self.auto_shrink = auto_shrink
+        self.pinned = pinned
+        self.on_pin_fail = on_pin_fail
+        self._initial_size = size
+        self.auto_recover_mutex = auto_recover_mutex
+        self._lock = threading.Lock() # Thread lock
+        
+        # User Isolation (POSIX only)
+        self._user_prefix = ""
+        if sys.platform != "win32" and hasattr(os, "getuid"):
+            self._user_prefix = f"u{os.getuid()}_"
+            
+        full_name = f"{self._user_prefix}{name}"
+        self._ipc_lock = Mutex(full_name) # Process lock
         self._active = True
+        self._last_gc_time = 0.0
 
         # Callbacks
         self._on_update_callbacks = []
@@ -93,27 +127,63 @@ class EasySHM:
 
         # Open the control segment (fixed 256 bytes, never resized)
         ctrl_name = f"easyshm_{name}_ctrl"
-        self._ctrl = Segment(ctrl_name, _CTRL_SIZE)
+        
+        with self._ipc_lock as lock_res:
+            if lock_res == "abandoned" and not self.auto_recover_mutex:
+                raise LockAbandonedError(f"[EasySHM] Mutex for '{full_name}' was abandoned. Data may be inconsistent.")
+            
+            self._ctrl = Segment(f"easyshm_{full_name}_ctrl", _CTRL_SIZE, mode=mode)
 
-        # Check magic to determine if we are CREATING or JOINING
-        raw_magic = self._ctrl.read(0, 4)
-        if raw_magic == _MAGIC:
-            # --- JOINING an existing segment ---
-            header = self._read_header()
-            self._seg_version = header["seg_version"]
-            self._data = Segment(
-                f"easyshm_{name}_d{self._seg_version}",
-                header["capacity"],
-            )
-        else:
-            # --- CREATING a new segment ---
-            self._seg_version = 0
-            capacity = max(size, 64)  # Minimum 64 bytes
-            self._data = Segment(f"easyshm_{name}_d0", capacity)
-            self._write_header(0, 0, capacity, 0)
+            # Check magic to determine if we are CREATING or JOINING
+            header = None
+            raw_magic = self._ctrl.read(0, 4)
+            if raw_magic == _MAGIC:
+                # JOINING: Wait for full initialization if needed
+                for attempt in range(20):
+                    try:
+                        header = self._read_header()
+                        if header["capacity"] > 0:
+                            break
+                    except ValueError:
+                         # Mid-write or checksum mismatch during init
+                         pass
+                    time.sleep(0.05)
+            
+            if header:
+                # --- JOINING: Compatibility Check ---
+                if header["protocol_version"] != _PROTOCOL_VERSION:
+                    raise ProtocolIncompatibilityError(
+                        f"[EasySHM] Incompatible protocol version: segment={header['protocol_version']}, "
+                        f"library={_PROTOCOL_VERSION}. Please call destroy() first."
+                    )
+                
+                # --- JOINING: Open existing data segment ---
+                self._seg_version = header["seg_version"]
+                self._data = Segment(
+                    f"easyshm_{full_name}_d{self._seg_version}",
+                    header["capacity"],
+                    mode=mode,
+                    pinned=self.pinned,
+                    on_pin_fail=self.on_pin_fail
+                )
+            else:
+                # --- CREATING: Initialize header and data segment ---
+                self._seg_version = 0
+                capacity = max(size, 64)  # Minimum 64 bytes
+                self._data = Segment(
+                    f"easyshm_{full_name}_d0", 
+                    capacity, 
+                    mode=mode, 
+                    pinned=self.pinned, 
+                    on_pin_fail=self.on_pin_fail
+                )
+                self._write_header(0, 0, capacity, 0)
+        
+        # Cleanup orphan segments from previous runs or other versions
+        self._cleanup_orphans()
 
         # Kernel signal (per-segment, not per-process)
-        self._signal = Signal(f"{name}_sig")
+        self._signal = Signal(f"{full_name}_sig")
 
         # Listener thread for incoming updates
         self._last_write_seq = self._read_header()["write_seq"]
@@ -121,118 +191,109 @@ class EasySHM:
         self._listener = threading.Thread(target=self._listener_loop, daemon=True)
         self._listener.start()
 
+
     # ------------------------------------------------------------------
     # Public API: Data Operations
     # ------------------------------------------------------------------
 
-    def write(self, data: bytes | bytearray | memoryview, offset: int = 0):
-        """Write data to the shared buffer.
-
-        If auto_grow is enabled and the data exceeds the current capacity,
-        the buffer is transparently expanded (segment rotation).
-
-        Args:
-            data:   Raw bytes to write.
-            offset: Byte offset within the buffer (default 0).
-        """
+    def write(self, data: bytes | bytearray | memoryview, offset: int = 0, truncate: bool = False):
+        """Write data to the shared buffer."""
         data = bytes(data)
         required = offset + len(data)
 
-        with self._lock:
-            header = self._read_header()
+        # Custom lock acquisition to handle abandoned state
+        lock_res = self._ipc_lock.acquire()
+        if lock_res is False:
+             raise TimeoutError(f"[EasySHM] Could not acquire IPC lock for writing")
+        if lock_res == "abandoned" and not self.auto_recover_mutex:
+            self._ipc_lock.release()
+            raise LockAbandonedError("[EasySHM] Mutex was abandoned during write. Data may be inconsistent.")
 
-            # Auto-grow if needed
-            if required > header["capacity"]:
-                if not self.auto_grow:
-                    raise OverflowError(
-                        f"[EasySHM] Data ({required} bytes) exceeds capacity "
-                        f"({header['capacity']} bytes) and auto_grow is disabled."
-                    )
-                self._do_resize(max(required, header["capacity"] * 2))
+        try:
+            with self._lock:
                 header = self._read_header()
 
-            # Write the data
-            self._data.write(data, offset)
+                # Auto-grow if needed
+                if required > header["capacity"]:
+                    if not self.auto_grow:
+                        raise OverflowError(
+                            f"[EasySHM] Data ({required} bytes) exceeds capacity "
+                            f"({header['capacity']} bytes) and auto_grow is disabled."
+                        )
+                    self._do_resize(max(required, header["capacity"] * 2))
+                    header = self._read_header()
 
-            # Update header
-            new_data_size = max(header["data_size"], required)
-            self._write_header(
-                self._seg_version,
-                new_data_size,
-                header["capacity"],
-                header["write_seq"] + 1,
-            )
+                # Write the data
+                self._data.write(data, offset)
 
-        # Signal other processes
+                # Update header
+                new_data_size = required if truncate else max(header["data_size"], required)
+                self._write_header(
+                    self._seg_version,
+                    new_data_size,
+                    header["capacity"],
+                    header["write_seq"] + 1,
+                )
+
+                # Auto-shrink if enabled
+                if self.auto_shrink and new_data_size < header["capacity"] * 0.25:
+                    # Target 50% capacity, but don't go below initial size
+                    target_capacity = max(self._initial_size, header["capacity"] // 2)
+                    if target_capacity < header["capacity"]:
+                        self._do_resize(target_capacity)
+        finally:
+            self._ipc_lock.release()
+
+        # Notify other processes
         self._signal.emit()
+        
+        # Cleanup obsolete segment if no one is using it anymore
+        self._cleanup_orphans(force=True)
 
     def read(self, size: int = None, offset: int = 0) -> bytes:
-        """Read data from the shared buffer.
-
-        Args:
-            size:   Number of bytes to read. None = read all used data.
-            offset: Start position (default 0).
-
-        Returns:
-            bytes object with the data.
-        """
-        with self._lock:
-            header = self._read_header()
-            if size is None:
-                size = max(0, header["data_size"] - offset)
-            return self._data.read(offset, size)
+        """Read data from the shared buffer."""
+        with self._ipc_lock as lock_res:
+             if lock_res == "abandoned" and not self.auto_recover_mutex:
+                 raise LockAbandonedError("[EasySHM] Mutex was abandoned. Data may be inconsistent.")
+             with self._lock:
+                header = self._read_header()
+                if size is None:
+                    size = max(0, header["data_size"] - offset)
+                return self._data.read(offset, size)
 
     def read_view(self, offset: int = 0, size: int = None) -> memoryview:
-        """Zero-copy view into the shared buffer.
-
-        The returned memoryview points directly into the mmap.
-        Changes made by other processes will be visible immediately.
-
-        Args:
-            offset: Start position.
-            size:   Number of bytes. None = all used data.
-        """
-        with self._lock:
-            header = self._read_header()
-            if size is None:
-                size = max(0, header["data_size"] - offset)
-            return memoryview(self._data.buf)[offset:offset + size]
+        """Zero-copy view into the shared buffer."""
+        with self._ipc_lock as lock_res:
+             if lock_res == "abandoned" and not self.auto_recover_mutex:
+                 raise LockAbandonedError("[EasySHM] Mutex was abandoned. Data may be inconsistent.")
+             with self._lock:
+                header = self._read_header()
+                if size is None:
+                    size = max(0, header["data_size"] - offset)
+                return memoryview(self._data.buf)[offset:offset + size]
 
     def resize(self, new_capacity: int):
-        """Manually expand the shared buffer.
-
-        This triggers a segment rotation: a new, larger segment is created,
-        data is copied over, and all other processes are notified.
-
-        Args:
-            new_capacity: New total capacity in bytes.
-        """
-        with self._lock:
-            header = self._read_header()
-            if new_capacity <= header["capacity"]:
-                return  # No-op if already large enough
-            self._do_resize(new_capacity)
+        """Manually resize the shared buffer."""
+        with self._ipc_lock as lock_res:
+             if lock_res == "abandoned" and not self.auto_recover_mutex:
+                 raise LockAbandonedError("[EasySHM] Mutex was abandoned. Data may be inconsistent.")
+             with self._lock:
+                header = self._read_header()
+                if new_capacity == header["capacity"]:
+                    return
+                self._do_resize(new_capacity)
         self._signal.emit()
 
     def as_view(self, name: str, **kwargs) -> Any:
-        """Map a typed view over the shared memory buffer (zero-copy).
-        
-        Args:
-            name:   Name of the registered view (e.g., 'numpy', 'struct', 'torch').
-            kwargs: Parameters for the view (e.g., shape, dtype, type).
-            
-        Returns:
-            A view object backed by the shared buffer.
-        """
+        """Map a typed view over the shared memory buffer (zero-copy)."""
         view = ViewRegistry.get(name)
         
-        # Ensure we have enough capacity if possible
-        # We need a rough estimate of size required by the view
-        # This is optional but helpful
-        
-        with self._lock:
-            # The view registry will map directly into self._data.buf
-            return view.map_buffer(memoryview(self._data.buf), **kwargs)
+        with self._ipc_lock as lock_res:
+             if lock_res == "abandoned" and not self.auto_recover_mutex:
+                 raise LockAbandonedError("[EasySHM] Mutex was abandoned. Data may be inconsistent.")
+             with self._lock:
+                # The view registry will map directly into self._data.buf
+                return view.map_buffer(memoryview(self._data.buf), **kwargs)
 
     def as_ndarray(self, shape, dtype="uint8"):
         """Return a NumPy array whose memory IS the shared buffer (zero-copy).
@@ -247,33 +308,15 @@ class EasySHM:
     # ------------------------------------------------------------------
 
     def on_update(self, callback: callable):
-        """Register a callback for when data changes.
-
-        The callback is called (from the listener thread) whenever another
-        process writes to this segment.
-
-        Args:
-            callback: A function with no arguments.
-        """
+        """Register a callback for when data changes."""
         self._on_update_callbacks.append(callback)
 
     def on_resize(self, callback: callable):
-        """Register a callback for when the segment is resized.
-
-        Args:
-            callback: A function receiving (new_capacity: int).
-        """
+        """Register a callback for when the segment is resized."""
         self._on_resize_callbacks.append(callback)
 
     def wait_update(self, timeout: float = None) -> bool:
-        """Block until data is updated by another process.
-
-        Args:
-            timeout: Max wait time in seconds. None = wait forever.
-
-        Returns:
-            True if an update occurred, False on timeout.
-        """
+        """Block until data is updated by another process."""
         timeout_ms = None if timeout is None else int(timeout * 1000)
         start_seq = self._read_header()["write_seq"]
 
@@ -287,7 +330,8 @@ class EasySHM:
                 remaining_ms = int(remaining * 1000)
 
             self._signal.wait(timeout_ms=min(remaining_ms or 100, 100))
-            if self._read_header()["write_seq"] != start_seq:
+            header = self._read_header()
+            if header["write_seq"] != start_seq:
                 return True
         return False
 
@@ -317,46 +361,44 @@ class EasySHM:
     def close(self):
         """Release resources. The segment persists for other processes."""
         self._active = False
-        if self._signal:
+        if hasattr(self, '_signal') and self._signal:
             self._signal.emit()  # Wake up listener so it can exit
-        if self._listener and self._listener.is_alive():
+        if hasattr(self, '_listener') and self._listener and self._listener.is_alive():
             self._listener.join(timeout=1.0)
-        if self._signal:
+        if hasattr(self, '_signal') and self._signal:
             self._signal.close()
             self._signal = None
-        if self._data:
+        if hasattr(self, '_data') and self._data:
             self._data.close()
             self._data = None
-        if self._ctrl:
+        if hasattr(self, '_ctrl') and self._ctrl:
             self._ctrl.close()
             self._ctrl = None
 
     def destroy(self):
-        """Release resources AND delete all OS objects (files, events).
-
-        Call this only when you are sure no other process needs this segment.
-        """
+        """Release resources AND delete all OS objects (files, events)."""
         self._active = False
-        if self._signal:
+        if hasattr(self, '_signal') and self._signal:
             self._signal.emit()
-        if self._listener and self._listener.is_alive():
+        if hasattr(self, '_listener') and self._listener and self._listener.is_alive():
             self._listener.join(timeout=1.0)
-        if self._signal:
+        if hasattr(self, '_signal') and self._signal:
             self._signal.destroy()
             self._signal = None
 
         # Destroy all versioned data segments
-        for v in range(self._seg_version + 1):
+        for v in range(getattr(self, '_seg_version', 0) + 1):
             try:
-                s = Segment(f"easyshm_{self.name}_d{v}", 1)
+                full_name = f"{self._user_prefix}{self.name}"
+                s = Segment(f"easyshm_{full_name}_d{v}", 1)
                 s.destroy()
             except Exception:
                 pass
 
-        if self._data:
+        if hasattr(self, '_data') and self._data:
             self._data.destroy()
             self._data = None
-        if self._ctrl:
+        if hasattr(self, '_ctrl') and self._ctrl:
             self._ctrl.destroy()
             self._ctrl = None
 
@@ -377,8 +419,18 @@ class EasySHM:
     # ------------------------------------------------------------------
 
     def _read_header(self) -> dict:
-        raw = self._ctrl.read(0, _HEADER_SIZE)
-        return _unpack_header(raw)
+        """Read and verify the control header with retries."""
+        last_err = None
+        for attempt in range(5):
+            try:
+                raw = self._ctrl.read(0, _HEADER_SIZE)
+                return _unpack_header(raw)
+            except ValueError as e:
+                last_err = e
+                # Maybe mid-write, wait a tiny bit and retry
+                time.sleep(0.005)
+        
+        raise ValueError(f"Failed to read a valid header after 5 attempts: {last_err}")
 
     def _write_header(self, seg_version, data_size, capacity, write_seq, flags=0):
         raw = _pack_header(seg_version, data_size, capacity, write_seq, flags)
@@ -399,7 +451,13 @@ class EasySHM:
 
         # Create the new data segment
         new_version = self._seg_version + 1
-        new_seg = Segment(f"easyshm_{self.name}_d{new_version}", new_capacity)
+        new_seg = Segment(
+            f"easyshm_{self.name}_d{new_version}", 
+            new_capacity,
+            mode=getattr(self._data, 'mode', 0o600),
+            pinned=self.pinned,
+            on_pin_fail=self.on_pin_fail
+        )
 
         # Copy existing data from old to new
         if old_data_size > 0:
@@ -417,7 +475,8 @@ class EasySHM:
 
         # Close the old segment (but don't delete — other processes may still
         # be reading from it; they'll switch when they see the version bump)
-        old_seg.close()
+        if old_seg:
+            old_seg.close()
 
         # Notify resize callbacks
         for cb in self._on_resize_callbacks:
@@ -431,11 +490,7 @@ class EasySHM:
     # ------------------------------------------------------------------
 
     def _listener_loop(self):
-        """Background thread that watches for updates from other processes.
-
-        Uses kernel signals (Events/Semaphores) for instant wake-up,
-        with a fallback timeout to catch any missed signals.
-        """
+        """Background thread that watches for updates from other processes."""
         while self._active:
             # Wait for a signal or timeout after 100ms
             self._signal.wait(timeout_ms=100)
@@ -443,21 +498,34 @@ class EasySHM:
             if not self._active:
                 break
 
-            header = self._read_header()
+            try:
+                header = self._read_header()
+            except ValueError:
+                continue
 
             # Check if the data segment was rotated (resize by another process)
             if header["seg_version"] != self._last_seg_version:
-                with self._lock:
-                    # Re-open the new data segment
-                    old = self._data
-                    self._data = Segment(
-                        f"easyshm_{self.name}_d{header['seg_version']}",
-                        header["capacity"],
-                    )
-                    self._seg_version = header["seg_version"]
-                    self._last_seg_version = header["seg_version"]
-                    if old:
-                        old.close()
+                try:
+                    with self._ipc_lock as lock_res:
+                        if lock_res == "abandoned" and not self.auto_recover_mutex:
+                             break
+                        with self._lock:
+                            # Re-open the new data segment
+                            old = self._data
+                            full_name = f"{self._user_prefix}{self.name}"
+                            self._data = Segment(
+                                f"easyshm_{full_name}_d{header['seg_version']}",
+                                header["capacity"],
+                                mode=getattr(self._data, 'mode', 0o600),
+                                pinned=self.pinned,
+                                on_pin_fail=self.on_pin_fail
+                            )
+                        self._seg_version = header["seg_version"]
+                        self._last_seg_version = header["seg_version"]
+                        if old:
+                            old.close()
+                except (TimeoutError, LockAbandonedError):
+                    pass
                 for cb in self._on_resize_callbacks:
                     try:
                         cb(header["capacity"])
@@ -472,3 +540,65 @@ class EasySHM:
                         cb()
                     except Exception:
                         pass
+                
+                # Try a cleanup when we detect a change (could have been a resize)
+                self._cleanup_orphans(force=True)
+
+    def _cleanup_orphans(self, force=False):
+        """Scan for orphaned data segments and delete them if unused."""
+        if sys.platform == "win32":
+            return
+            
+        now = time.time()
+        # Cooldown of 60 seconds unless forced (e.g. on write/resize)
+        if not force and (now - self._last_gc_time) < 60:
+            return
+        
+        self._last_gc_time = now
+
+        try:
+            import fcntl
+            from .segment import _get_shm_dir
+        except ImportError:
+            return
+
+        shm_dir = _get_shm_dir()
+        full_name = f"{self._user_prefix}{self.name}"
+        
+        # Patterns for segments and semaphores
+        # Data segments: easyshm_{full_name}_d*
+        # Control: easyshm_{full_name}_ctrl
+        # Sems: sem.easyshm_{full_name}_sig
+        patterns = [
+            os.path.join(shm_dir, f"easyshm_{full_name}_d*"),
+            os.path.join(shm_dir, f"easyshm_{full_name}_ctrl"),
+            os.path.join(shm_dir, f"sem.easyshm_{full_name}_sig"),
+        ]
+        
+        current_files = {
+            os.path.join(shm_dir, f"easyshm_{full_name}_d{self._seg_version}"),
+            os.path.join(shm_dir, f"easyshm_{full_name}_ctrl"),
+            os.path.join(shm_dir, f"sem.easyshm_{full_name}_sig"),
+        }
+
+        for pattern in patterns:
+            for filepath in glob.glob(pattern):
+                if filepath in current_files:
+                    continue
+                
+                # Check if it exists (it might have been deleted by another process already)
+                if not os.path.exists(filepath):
+                    continue
+
+                try:
+                    fd = os.open(filepath, os.O_RDWR)
+                    try:
+                        # Success if we can get an EXCLUSIVE lock
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        os.unlink(filepath)
+                    except (OSError, IOError):
+                        pass
+                    finally:
+                        os.close(fd)
+                except (OSError, IOError):
+                    pass

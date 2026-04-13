@@ -5,7 +5,7 @@ setup(
     version="0.1.0",
     author="GalTechDev",
     description="High-performance Shared Memory IPC with kernel signaling for Python",
-    long_description=open("README.md").read(),
+    long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/GalTechDev/easyshm",
     packages=find_packages(),

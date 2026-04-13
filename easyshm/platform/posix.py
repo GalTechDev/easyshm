@@ -5,11 +5,14 @@ Uses POSIX Named Semaphores for zero-latency inter-process signaling.
 No root/admin rights required.
 """
 
-import ctypes
-import ctypes.util
+import os
+import fcntl
+import tempfile
 import time
 import sys
-from .base import Signal
+import ctypes
+import ctypes.util
+from .base import Signal, Mutex
 
 
 # --- Locate the C library containing sem_* functions ---
@@ -98,9 +101,13 @@ class PosixSignal(Signal):
             )
 
     def emit(self):
-        """Post (increment) the semaphore, waking one waiter."""
+        """Signal all waiters (Best-effort broadcast via multiple posts)."""
         if self._sem:
-            PosixSignal._lib.sem_post(self._sem)
+            # POSIX semaphores only wake one waiter per post.
+            # We post multiple times to try to cover common subscriber counts.
+            # The 100ms fallback in the listener handles the rest.
+            for _ in range(16):
+                PosixSignal._lib.sem_post(self._sem)
 
     def wait(self, timeout_ms: int = None) -> bool:
         """Wait on the semaphore. Returns True if signaled, False on timeout."""
@@ -145,3 +152,48 @@ class PosixSignal(Signal):
         if self._sem_name:
             PosixSignal._lib.sem_unlink(self._sem_name)
             self._sem_name = None
+
+
+def _get_shm_dir():
+    if os.path.isdir("/dev/shm"):
+        return "/dev/shm"
+    return tempfile.gettempdir()
+
+
+class PosixMutex(Mutex):
+    """File-based locking (flock) for inter-process mutual exclusion on POSIX."""
+
+    def __init__(self, name: str):
+        super().__init__(name)
+        shm_dir = _get_shm_dir()
+        self._path = os.path.join(shm_dir, f"easyshm_mtx_{name}")
+        flags = os.O_CREAT | os.O_RDWR
+        if hasattr(os, 'O_CLOEXEC'):
+            flags |= os.O_CLOEXEC
+        self._fd = os.open(self._path, flags, 0o666)
+
+    def acquire(self, timeout_ms: int = None) -> bool:
+        if timeout_ms is None:
+            fcntl.flock(self._fd, fcntl.LOCK_EX)
+            return True
+        else:
+            end = time.time() + (timeout_ms / 1000.0)
+            while time.time() < end:
+                try:
+                    fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    return True
+                except (IOError, OSError, BlockingIOError):
+                    time.sleep(0.005)
+            return False
+
+    def release(self):
+        if self._fd is not None:
+            try:
+                fcntl.flock(self._fd, fcntl.LOCK_UN)
+            except (IOError, OSError):
+                pass
+
+    def close(self):
+        if self._fd is not None:
+            os.close(self._fd)
+            self._fd = None

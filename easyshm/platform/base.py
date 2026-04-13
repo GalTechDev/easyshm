@@ -51,3 +51,42 @@ class Signal(ABC):
             self.close()
         except Exception:
             pass
+class Mutex(ABC):
+    """Abstract cross-platform mutual exclusion (lock) for inter-process sync.
+    """
+
+    def __init__(self, name: str):
+        self.name = name
+
+    @abstractmethod
+    def acquire(self, timeout_ms: int = None) -> bool | str:
+        """Acquire the lock. 
+        
+        Returns:
+            True: Success.
+            False: Timeout / Failure.
+            "abandoned": Success, but the previous owner crashed (Windows).
+        """
+
+    @abstractmethod
+    def release(self):
+        """Release the lock."""
+
+    @abstractmethod
+    def close(self):
+        """Release OS resources."""
+
+    def __enter__(self):
+        res = self.acquire()
+        if res is False:
+            raise TimeoutError(f"Could not acquire Mutex '{self.name}'")
+        return res # Return the result so caller can check for "abandoned"
+
+    def __exit__(self, *args):
+        self.release()
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
