@@ -1,22 +1,22 @@
-# EasySHM 🚀
+# EasySHM
 
 **High-Performance Shared Memory IPC for Python.**
 
 EasySHM is a low-latency communication library that allows Python processes to share data directly through RAM.
 
-## Features ✨
+## Features
 - **Zero-Socket IPC**: No open ports, no network overhead.
 - **Kernel-Level Signaling**: Uses a futex (Linux), POSIX semaphores (macOS) or Win32 Events (Windows) to wake every waiting process at once.
 - **Auto-Grow**: Dynamic memory segment resizing without stopping the system.
 - **NumPy Zero-Copy**: Share large arrays at RAM speeds (Giga-octets per second).
 - **Thread-Safe & Process-Safe**: Built-in locking mechanism.
 
-## Installation 📦
+## Installation
 ```bash
 pip install py-easyshm
 ```
 
-## Quick Start ⏱️
+## Quick Start
 ```python
 from easyshm import EasySHM
 import ctypes
@@ -40,18 +40,18 @@ import torch
 t = shm.as_view("torch", shape=(10,))
 ```
 
-## Architecture 🛠️
+## Architecture
 EasySHM is platform-agnostic:
 - **Windows**: Uses `CreateFileMapping` and session-scoped Named Events (`Local\`).
 - **Linux/Unix**: Uses POSIX `mmap` and Semaphores in `/dev/shm`.
 
-## Advanced Views 🧩
+## Advanced Views
 EasySHM now supports an extensible **View Registry**. You can map any typed structure directly over shared bytes without copies.
 - `as_view("numpy", shape, dtype)`
 - `as_view("struct", type=MyCtypesStruct)`
 - `as_view("torch", shape, dtype)`
 
-## Performance ⚡
+## Performance
 Measured with `python benchmarks/latency.py` (two processes, thousands of round trips; Linux/WSL2, Python 3.12):
 
 | Measure | EasySHM | TCP localhost |
