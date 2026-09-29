@@ -1,6 +1,7 @@
 import time
 import os
 import sys
+import helpers  # noqa: F401  (makes the local package importable)
 from easyshm import EasySHM
 
 def test_manual_shrink():

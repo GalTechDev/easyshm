@@ -3,6 +3,8 @@ import sys
 import unittest
 import struct
 import zlib
+
+from helpers import shm_file
 from easyshm import EasySHM, ProtocolIncompatibilityError
 
 class TestProtocolIncompatibility(unittest.TestCase):
@@ -10,14 +12,11 @@ class TestProtocolIncompatibility(unittest.TestCase):
         name = "test_proto_mismatch"
         
         # 1. Start clean
-        try:
-            EasySHM(name).destroy()
-        except:
-            pass
+        EasySHM.unlink(name)
 
         # 2. Simulate an "old" segment with protocol version 99 (future/incompatible)
         # We need to write the header manually because the library won't let us write 99
-        ctrl_name = f"easyshm_{name}_ctrl"
+        ctrl_name = os.path.basename(shm_file(name, "ctrl"))
         from easyshm.segment import Segment
         ctrl = Segment(ctrl_name, 256)
         
@@ -42,22 +41,15 @@ class TestProtocolIncompatibility(unittest.TestCase):
         except ProtocolIncompatibilityError as e:
             print(f"Success: Caught expected error: {e}")
             self.assertIn("Incompatible protocol version", str(e))
+            self.assertIn("EasySHM.unlink", str(e))
         except Exception as e:
             self.fail(f"Caught wrong exception: {type(e).__name__}: {e}")
         finally:
             # Cleanup
             ctrl.close() # Now we can close
-            try:
-                # We need to manually destroy since EasySHM(name) fails
-                from easyshm.platform import Signal
-                Signal(f"{name}_sig").destroy()
-                ctrl = Segment(ctrl_name, 256)
-                ctrl.destroy()
-                # Also the data segment d0
-                data = Segment(f"easyshm_{name}_d0", 1024)
-                data.destroy()
-            except:
-                pass
+            # EasySHM(name) cannot be opened, so delete it by name
+            EasySHM.unlink(name)
+            self.assertFalse(os.path.exists(shm_file(name, "ctrl")))
 
 if __name__ == "__main__":
     unittest.main()

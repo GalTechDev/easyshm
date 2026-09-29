@@ -4,6 +4,8 @@ import time
 import glob
 import subprocess
 import tempfile
+
+from helpers import child_env
 from easyshm import EasySHM
 
 def test_gc_logic():
@@ -16,9 +18,11 @@ def test_gc_logic():
         return
 
     name = "test_gc_posix"
+    # Files are prefixed with the user id on POSIX (see EasySHM._user_prefix)
+    full_name = f"u{os.getuid()}_{name}"
     # Ensure clean start
     dir_shm = "/dev/shm" if os.path.isdir("/dev/shm") else tempfile.gettempdir()
-    for f in glob.glob(os.path.join(dir_shm, f"easyshm_{name}_*")):
+    for f in glob.glob(os.path.join(dir_shm, f"easyshm_{full_name}_*")):
         try: os.unlink(f)
         except: pass
 
@@ -33,7 +37,7 @@ def test_gc_logic():
     # Actually, right now nobody else is using v0, so resize calls _cleanup_orphans
     # which SHOULD delete v0 immediately.
     
-    v0_path = os.path.join(dir_shm, f"easyshm_{name}_d0")
+    v0_path = os.path.join(dir_shm, f"easyshm_{full_name}_d0")
     if os.path.exists(v0_path):
         print("Error: v0 should have been cleaned up as it's unused!")
         assert not os.path.exists(v0_path)
@@ -41,16 +45,18 @@ def test_gc_logic():
         print("v0 was successfully cleaned up.")
 
     # Simulate an orphan that IS in use
-    # We launch a subprocess that keeps v1 open
-    code = f"import sys; sys.path.append('.'); from easyshm import EasySHM; import time; s=EasySHM('{name}'); time.sleep(2)"
-    p = subprocess.Popen([sys.executable, "-c", code], env=os.environ.copy())
-    time.sleep(0.5) # Let it open
+    # We launch a subprocess that keeps v1 open. It maps the raw Segment (which holds
+    # the same shared flock as EasySHM) because an EasySHM instance would follow the
+    # resize to v2 and legitimately release v1.
+    code = f"from easyshm.segment import Segment; import time; s=Segment('easyshm_{full_name}_d1', 2048); print('ready', flush=True); time.sleep(2)"
+    p = subprocess.Popen([sys.executable, "-c", code], env=child_env(), stdout=subprocess.PIPE, text=True)
+    assert p.stdout.readline().strip() == "ready"  # Wait until it has opened v1
     
     # Now we resize again (v1 -> v2)
     shm.resize(4096)
     
     # v1 should STILL be there because the subprocess is holding it
-    v1_path = os.path.join(dir_shm, f"easyshm_{name}_d1")
+    v1_path = os.path.join(dir_shm, f"easyshm_{full_name}_d1")
     if os.path.exists(v1_path):
         print("v1 is still there (correctly) because subprocess is using it.")
     else:

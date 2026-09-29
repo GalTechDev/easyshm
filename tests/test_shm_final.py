@@ -3,7 +3,8 @@ import time
 import sys
 import os
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from helpers import require_easysync
+require_easysync()
 from easysync import shm_connect, SyncedObject
 
 @SyncedObject()
@@ -64,4 +65,8 @@ if __name__ == "__main__":
     p1.join(timeout=10); p2.join(timeout=10)
     
     with open("test_results.txt", "r") as f:
-        print(f.read())
+        results = f.read()
+    os.unlink("test_results.txt")
+    print(results)
+    if not results.endswith("SUCCESS"):
+        sys.exit(1)

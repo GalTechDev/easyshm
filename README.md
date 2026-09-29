@@ -2,11 +2,11 @@
 
 **High-Performance Shared Memory IPC for Python.**
 
-EasySHM is a zero-latency communication library that allows Python processes to share data directly through RAM.
+EasySHM is a low-latency communication library that allows Python processes to share data directly through RAM.
 
 ## Features ✨
 - **Zero-Socket IPC**: No open ports, no network overhead.
-- **Kernel-Level Signaling**: Uses Win32 Events (Windows) and POSIX Semaphores (Linux) for instant wake-ups.
+- **Kernel-Level Signaling**: Uses a futex (Linux), POSIX semaphores (macOS) or Win32 Events (Windows) to wake every waiting process at once.
 - **Auto-Grow**: Dynamic memory segment resizing without stopping the system.
 - **NumPy Zero-Copy**: Share large arrays at RAM speeds (Giga-octets per second).
 - **Thread-Safe & Process-Safe**: Built-in locking mechanism.
@@ -52,10 +52,15 @@ EasySHM now supports an extensible **View Registry**. You can map any typed stru
 - `as_view("torch", shape, dtype)`
 
 ## Performance ⚡
-| Transport | Latency (1MB Sync) | Overhead |
-|-----------|--------------------|----------|
-| TCP (Socket) | ~5.0ms - 20ms     | High (Network Stack) |
-| **EasySHM** | **< 0.1ms**        | **Zero (Direct RAM)** |
+Measured with `python benchmarks/latency.py` (two processes, thousands of round trips; Linux/WSL2, Python 3.12):
+
+| Measure | EasySHM | TCP localhost |
+|---------|---------|---------------|
+| Wake-up latency, one-way (median / p99) | 35 µs / 130 µs | 17 µs / 80 µs |
+| 1 MB round trip (median) | ~170–190 µs | ~110–160 µs |
+| Idle CPU with an open segment | 0 % | 0 % |
+
+Latency is dominated by Python itself, so a localhost socket is still faster for tiny messages. EasySHM is useful when several processes share the same (large) state without resending it, with no port to open. Run the benchmark on your own machine for real numbers.
 
 
 ---

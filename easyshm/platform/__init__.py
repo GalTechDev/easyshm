@@ -8,7 +8,8 @@ import sys
 
 if sys.platform == "win32":
     from .win32 import Win32Signal as Signal, Win32Mutex as Mutex
+    FutexSignal = None
 else:
-    from .posix import PosixSignal as Signal, PosixMutex as Mutex
+    from .posix import PosixSignal as Signal, PosixMutex as Mutex, FutexSignal
 
-__all__ = ["Signal", "Mutex"]
+__all__ = ["Signal", "Mutex", "FutexSignal"]

@@ -5,10 +5,11 @@ import threading
 import time
 import zlib
 import glob
+import re
 from typing import Any, List, Dict
 
 from .segment import Segment
-from .platform import Signal, Mutex
+from .platform import Signal, Mutex, FutexSignal
 
 
 class LockAbandonedError(Exception):
@@ -19,9 +20,17 @@ class LockAbandonedError(Exception):
 class ProtocolIncompatibilityError(Exception):
     """Raised when the existing segment has an incompatible protocol version."""
     pass
+
+
+class CorruptedSegmentError(ValueError):
+    """Raised when joining a segment whose control header is corrupted.
+
+    The existing data is left untouched; use EasySHM.unlink(name) to delete it.
+    """
+    pass
 from .views import ViewRegistry
 
-__all__ = ["EasySHM", "LockAbandonedError", "ProtocolIncompatibilityError"]
+__all__ = ["EasySHM", "LockAbandonedError", "ProtocolIncompatibilityError", "CorruptedSegmentError"]
 
 # Header Layout (256 bytes)
 # ========================
@@ -44,6 +53,7 @@ _PROTOCOL_VERSION = 1
 _HEADER_FORMAT = "<4sIQQIIII"
 _HEADER_SIZE = struct.calcsize(_HEADER_FORMAT)  # 40 bytes
 _MAGIC = b"ESHM"
+_WRITE_SEQ_OFFSET = 24  # write_seq field, also used as the futex word on Linux
 
 
 def _calculate_checksum(raw_header):
@@ -89,6 +99,10 @@ class EasySHM:
                     Ignored if the segment already exists.
         auto_grow:  If True (default), write() automatically expands the
                     buffer when data exceeds the current capacity.
+        persistent: If False (default), the last process to close() the
+                    segment deletes it. If True, it survives until destroy().
+                    POSIX only: on Windows the OS always frees it with the
+                    last handle.
     """
 
     def __init__(
@@ -100,9 +114,12 @@ class EasySHM:
         mode: int = 0o600,
         auto_recover_mutex: bool = True,
         pinned: bool = False,
-        on_pin_fail: str = "error"
+        on_pin_fail: str = "error",
+        persistent: bool = False
     ):
+        self._closed = False
         self.name = name
+        self.persistent = persistent
         self.auto_grow = auto_grow
         self.auto_shrink = auto_shrink
         self.pinned = pinned
@@ -115,19 +132,53 @@ class EasySHM:
         self._user_prefix = ""
         if sys.platform != "win32" and hasattr(os, "getuid"):
             self._user_prefix = f"u{os.getuid()}_"
-            
+
         full_name = f"{self._user_prefix}{name}"
+        self._full_name = full_name
         self._ipc_lock = Mutex(full_name) # Process lock
         self._active = True
         self._last_gc_time = 0.0
+        self._gc_seg_version = -1  # seg_version at the last orphan scan
 
         # Callbacks
         self._on_update_callbacks = []
         self._on_resize_callbacks = []
+        self._retired_segments = []
+        self._last_seg_version = 0
+
+        try:
+            self._open_segments(size, mode)
+        except BaseException:
+            # Release our handles without close(): as the last user it would
+            # delete a segment we could not even read.
+            self._closed = True
+            for seg in (getattr(self, '_data', None), getattr(self, '_ctrl', None)):
+                if seg:
+                    seg.close()
+            self._ipc_lock.close()
+            raise
+
+        # Cleanup orphan segments from previous runs or other versions
+        self._cleanup_orphans()
+
+        # Kernel signal (per-segment, not per-process): a futex on write_seq on
+        # Linux (true broadcast), a named semaphore / event elsewhere
+        if FutexSignal is not None and FutexSignal.available():
+            self._signal = FutexSignal(f"{full_name}_sig", self._ctrl.buf, _WRITE_SEQ_OFFSET)
+        else:
+            self._signal = Signal(f"{full_name}_sig")
+
+        self._seen_seq = self._read_header()["write_seq"]  # last write_seq reported by wait_update()
+        # The listener thread only serves on_update/on_resize callbacks, so it
+        # starts with the first one: an idle thread woken by every write would
+        # compete for the GIL and slow down each write about 5x.
+        self._listener = None
+
+    def _open_segments(self, size: int, mode: int):
+        """Create or join the control and data segments."""
+        full_name = self._full_name
 
         # Open the control segment (fixed 256 bytes, never resized)
-        ctrl_name = f"easyshm_{name}_ctrl"
-        
         with self._ipc_lock as lock_res:
             if lock_res == "abandoned" and not self.auto_recover_mutex:
                 raise LockAbandonedError(f"[EasySHM] Mutex for '{full_name}' was abandoned. Data may be inconsistent.")
@@ -148,13 +199,19 @@ class EasySHM:
                          # Mid-write or checksum mismatch during init
                          pass
                     time.sleep(0.05)
-            
+                if header is None:
+                    raise CorruptedSegmentError(
+                        f"[EasySHM] Segment '{self.name}' exists but its control header is "
+                        f"corrupted. Existing data was left untouched; call "
+                        f"EasySHM.unlink({self.name!r}) to delete it."
+                    )
+
             if header:
                 # --- JOINING: Compatibility Check ---
                 if header["protocol_version"] != _PROTOCOL_VERSION:
                     raise ProtocolIncompatibilityError(
                         f"[EasySHM] Incompatible protocol version: segment={header['protocol_version']}, "
-                        f"library={_PROTOCOL_VERSION}. Please call destroy() first."
+                        f"library={_PROTOCOL_VERSION}. Call EasySHM.unlink({self.name!r}) to delete it."
                     )
                 
                 # --- JOINING: Open existing data segment ---
@@ -178,18 +235,6 @@ class EasySHM:
                     on_pin_fail=self.on_pin_fail
                 )
                 self._write_header(0, 0, capacity, 0)
-        
-        # Cleanup orphan segments from previous runs or other versions
-        self._cleanup_orphans()
-
-        # Kernel signal (per-segment, not per-process)
-        self._signal = Signal(f"{full_name}_sig")
-
-        # Listener thread for incoming updates
-        self._last_write_seq = self._read_header()["write_seq"]
-        self._last_seg_version = self._seg_version
-        self._listener = threading.Thread(target=self._listener_loop, daemon=True)
-        self._listener.start()
 
 
     # ------------------------------------------------------------------
@@ -212,6 +257,7 @@ class EasySHM:
         try:
             with self._lock:
                 header = self._read_header()
+                self._sync_data_segment(header)
 
                 # Auto-grow if needed
                 if required > header["capacity"]:
@@ -234,6 +280,10 @@ class EasySHM:
                     header["capacity"],
                     header["write_seq"] + 1,
                 )
+                # Our own write is not an "update" for wait_update(), unless
+                # someone else's write is still unreported.
+                if self._seen_seq == header["write_seq"]:
+                    self._seen_seq = header["write_seq"] + 1
 
                 # Auto-shrink if enabled
                 if self.auto_shrink and new_data_size < header["capacity"] * 0.25:
@@ -257,6 +307,7 @@ class EasySHM:
                  raise LockAbandonedError("[EasySHM] Mutex was abandoned. Data may be inconsistent.")
              with self._lock:
                 header = self._read_header()
+                self._sync_data_segment(header)
                 if size is None:
                     size = max(0, header["data_size"] - offset)
                 return self._data.read(offset, size)
@@ -268,6 +319,7 @@ class EasySHM:
                  raise LockAbandonedError("[EasySHM] Mutex was abandoned. Data may be inconsistent.")
              with self._lock:
                 header = self._read_header()
+                self._sync_data_segment(header)
                 if size is None:
                     size = max(0, header["data_size"] - offset)
                 return memoryview(self._data.buf)[offset:offset + size]
@@ -279,10 +331,14 @@ class EasySHM:
                  raise LockAbandonedError("[EasySHM] Mutex was abandoned. Data may be inconsistent.")
              with self._lock:
                 header = self._read_header()
+                self._sync_data_segment(header)
                 if new_capacity == header["capacity"]:
                     return
                 self._do_resize(new_capacity)
         self._signal.emit()
+
+        # Cleanup obsolete segment if no one is using it anymore
+        self._cleanup_orphans(force=True)
 
     def as_view(self, name: str, **kwargs) -> Any:
         """Map a typed view over the shared memory buffer (zero-copy)."""
@@ -292,6 +348,7 @@ class EasySHM:
              if lock_res == "abandoned" and not self.auto_recover_mutex:
                  raise LockAbandonedError("[EasySHM] Mutex was abandoned. Data may be inconsistent.")
              with self._lock:
+                self._sync_data_segment(self._read_header())
                 # The view registry will map directly into self._data.buf
                 return view.map_buffer(memoryview(self._data.buf), **kwargs)
 
@@ -308,17 +365,33 @@ class EasySHM:
     # ------------------------------------------------------------------
 
     def on_update(self, callback: callable):
-        """Register a callback for when data changes."""
+        """Register a callback for when data changes (runs in a background thread)."""
         self._on_update_callbacks.append(callback)
+        self._start_listener()
 
     def on_resize(self, callback: callable):
-        """Register a callback for when the segment is resized."""
+        """Register a callback for when the segment is resized (runs in a background thread)."""
         self._on_resize_callbacks.append(callback)
+        self._start_listener()
+
+    def _start_listener(self):
+        if self._listener is not None or not self._active:
+            return
+        self._last_write_seq = self._read_header()["write_seq"]
+        self._last_seg_version = self._seg_version
+        self._listener = threading.Thread(target=self._listener_loop, daemon=True)
+        self._listener.start()
 
     def wait_update(self, timeout: float = None) -> bool:
-        """Block until data is updated by another process."""
+        """Block until data is updated by another process.
+
+        Returns True as soon as a write happened since the last update this
+        instance reported (writes made between two calls are not missed),
+        False on timeout. Several writes may be reported by a single True.
+        """
         timeout_ms = None if timeout is None else int(timeout * 1000)
-        start_seq = self._read_header()["write_seq"]
+        if self._consume_update():
+            return True
 
         deadline = None if timeout is None else time.time() + timeout
         while self._active:
@@ -329,11 +402,17 @@ class EasySHM:
                     return False
                 remaining_ms = int(remaining * 1000)
 
-            self._signal.wait(timeout_ms=min(remaining_ms or 100, 100))
-            header = self._read_header()
-            if header["write_seq"] != start_seq:
+            self._signal.wait(timeout_ms=min(remaining_ms or 100, 100), expected=self._seen_seq)
+            if self._consume_update():
                 return True
         return False
+
+    def _consume_update(self) -> bool:
+        seq = self._read_header()["write_seq"]
+        if seq == self._seen_seq:
+            return False
+        self._seen_seq = seq
+        return True
 
     # ------------------------------------------------------------------
     # Public API: Metadata
@@ -359,24 +438,90 @@ class EasySHM:
     # ------------------------------------------------------------------
 
     def close(self):
-        """Release resources. The segment persists for other processes."""
+        """Release resources.
+
+        The segment stays available while other processes use it. The last
+        process to close it deletes every OS object, unless persistent=True.
+        """
+        if getattr(self, '_closed', True):
+            return
+        self._closed = True
         self._active = False
         if hasattr(self, '_signal') and self._signal:
             self._signal.emit()  # Wake up listener so it can exit
         if hasattr(self, '_listener') and self._listener and self._listener.is_alive():
             self._listener.join(timeout=1.0)
-        if hasattr(self, '_signal') and self._signal:
-            self._signal.close()
-            self._signal = None
-        if hasattr(self, '_data') and self._data:
-            self._data.close()
-            self._data = None
-        if hasattr(self, '_ctrl') and self._ctrl:
-            self._ctrl.close()
-            self._ctrl = None
+
+        if not hasattr(self, '_ipc_lock'):
+            return
+        # Hold the IPC lock so no process can join while we decide whether we
+        # are the last user.
+        locked = self.persistent is False and self._ipc_lock.acquire(timeout_ms=5000) is not False
+        try:
+            signal = getattr(self, '_signal', None)
+            if signal:
+                signal.close()  # Before the control segment: the futex maps into it
+            if hasattr(self, '_data') and self._data:
+                self._data.close()
+                self._data = None
+            if hasattr(self, '_ctrl') and self._ctrl:
+                self._ctrl.close()  # Drops our shared "in use" flock
+                self._ctrl = None
+            last = locked and self._remove_if_last_user()
+            if signal:
+                if last:
+                    signal.destroy()  # Removes the named semaphore, if any
+                self._signal = None
+            if last:
+                self._ipc_lock.destroy()
+        finally:
+            if locked:
+                self._ipc_lock.release()
+            self._ipc_lock.close()
+
+    def _remove_if_last_user(self) -> bool:
+        """Delete the segment files if no other process holds them open.
+
+        Every EasySHM instance keeps a shared flock on the control segment, and
+        the kernel drops it when the process exits or crashes. If we can take an
+        exclusive lock, nobody else is using the segment. Must be called while
+        holding the IPC lock, after closing our own segments.
+        """
+        if sys.platform == "win32":
+            return False  # Kernel objects are refcounted by the OS
+        import fcntl
+        from .segment import _get_shm_dir
+
+        ctrl_path = os.path.join(_get_shm_dir(), f"easyshm_{self._full_name}_ctrl")
+        try:
+            fd = os.open(ctrl_path, os.O_RDWR)
+        except FileNotFoundError:
+            # Already destroyed (e.g. by destroy() in another instance). We hold
+            # the IPC lock, so nobody is creating it: only leftovers remain.
+            for path in self._data_segment_paths():
+                self._unlink_if_unused(path)
+            return True
+        try:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except (OSError, IOError):
+                return False  # Still used by another process
+            for path in self._data_segment_paths():
+                self._unlink_if_unused(path)
+            try:
+                os.unlink(ctrl_path)
+            except FileNotFoundError:
+                pass
+            return True
+        finally:
+            os.close(fd)
 
     def destroy(self):
-        """Release resources AND delete all OS objects (files, events)."""
+        """Release resources AND delete all OS objects (files, events),
+        even if other processes are still using the segment."""
+        if getattr(self, '_closed', True):
+            return
+        self._closed = True
         self._active = False
         if hasattr(self, '_signal') and self._signal:
             self._signal.emit()
@@ -401,6 +546,9 @@ class EasySHM:
         if hasattr(self, '_ctrl') and self._ctrl:
             self._ctrl.destroy()
             self._ctrl = None
+        if hasattr(self, '_ipc_lock'):
+            self._ipc_lock.destroy()
+            self._ipc_lock.close()
 
     def __enter__(self):
         return self
@@ -440,6 +588,39 @@ class EasySHM:
     # Internal: Resize (Segment Rotation)
     # ------------------------------------------------------------------
 
+    def _sync_data_segment(self, header):
+        """Switch to the data segment named in the header if another process
+        rotated it (resize). Must be called holding the IPC and thread locks,
+        so an operation never touches a stale segment while the listener
+        thread has not caught up yet.
+        """
+        if header["seg_version"] == self._seg_version:
+            return
+        old = self._data
+        self._data = Segment(
+            f"easyshm_{self._full_name}_d{header['seg_version']}",
+            header["capacity"],
+            mode=getattr(old, 'mode', 0o600),
+            pinned=self.pinned,
+            on_pin_fail=self.on_pin_fail
+        )
+        self._seg_version = header["seg_version"]
+        if old:
+            self._close_segment(old)
+
+    def _close_segment(self, seg):
+        """Close a retired data segment, or keep it for later if user views
+        (as_view / read_view) still point into its memory."""
+        try:
+            seg.close()
+        except BufferError:
+            # Keep the mapping alive for the views, but release the file (and
+            # its "in use" flock) so the last-user cleanup is not blocked.
+            if seg._fd is not None:
+                os.close(seg._fd)
+                seg._fd = None
+            self._retired_segments.append(seg)
+
     def _do_resize(self, new_capacity: int):
         """Create a new, larger data segment, copy data, and swap.
 
@@ -451,8 +632,9 @@ class EasySHM:
 
         # Create the new data segment
         new_version = self._seg_version + 1
+        full_name = f"{self._user_prefix}{self.name}"
         new_seg = Segment(
-            f"easyshm_{self.name}_d{new_version}", 
+            f"easyshm_{full_name}_d{new_version}",
             new_capacity,
             mode=getattr(self._data, 'mode', 0o600),
             pinned=self.pinned,
@@ -476,7 +658,9 @@ class EasySHM:
         # Close the old segment (but don't delete — other processes may still
         # be reading from it; they'll switch when they see the version bump)
         if old_seg:
-            old_seg.close()
+            self._close_segment(old_seg)
+        # Our own rotation: the listener must not fire on_resize a second time
+        self._last_seg_version = new_version
 
         # Notify resize callbacks
         for cb in self._on_resize_callbacks:
@@ -493,7 +677,7 @@ class EasySHM:
         """Background thread that watches for updates from other processes."""
         while self._active:
             # Wait for a signal or timeout after 100ms
-            self._signal.wait(timeout_ms=100)
+            self._signal.wait(timeout_ms=100, expected=self._last_write_seq)
 
             if not self._active:
                 break
@@ -510,20 +694,11 @@ class EasySHM:
                         if lock_res == "abandoned" and not self.auto_recover_mutex:
                              break
                         with self._lock:
-                            # Re-open the new data segment
-                            old = self._data
-                            full_name = f"{self._user_prefix}{self.name}"
-                            self._data = Segment(
-                                f"easyshm_{full_name}_d{header['seg_version']}",
-                                header["capacity"],
-                                mode=getattr(self._data, 'mode', 0o600),
-                                pinned=self.pinned,
-                                on_pin_fail=self.on_pin_fail
-                            )
-                        self._seg_version = header["seg_version"]
+                            # Re-open the new data segment (no-op if a
+                            # read/write already switched to it)
+                            header = self._read_header()
+                            self._sync_data_segment(header)
                         self._last_seg_version = header["seg_version"]
-                        if old:
-                            old.close()
                 except (TimeoutError, LockAbandonedError):
                     pass
                 for cb in self._on_resize_callbacks:
@@ -544,61 +719,107 @@ class EasySHM:
                 # Try a cleanup when we detect a change (could have been a resize)
                 self._cleanup_orphans(force=True)
 
+    def _data_segment_paths(self) -> List[str]:
+        """Backing files of every data segment version (POSIX)."""
+        return _data_segment_paths(self._full_name)
+
+    @staticmethod
+    def unlink(name: str):
+        """Delete every OS object of a segment, without opening it.
+
+        Use it to remove a segment that cannot be joined (corrupted header,
+        incompatible protocol). Processes still using it keep their mapping,
+        but new ones will create a fresh segment. No-op on Windows, where the
+        OS frees the segment with its last handle.
+        """
+        if sys.platform == "win32":
+            return
+        from .segment import _get_shm_dir
+
+        full_name = f"u{os.getuid()}_{name}" if hasattr(os, "getuid") else name
+        shm_dir = _get_shm_dir()
+        paths = _data_segment_paths(full_name) + [
+            os.path.join(shm_dir, f"easyshm_{full_name}_ctrl"),
+            os.path.join(shm_dir, f"easyshm_mtx_{full_name}"),
+        ]
+        for path in paths:
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+        try:
+            Signal(f"{full_name}_sig").destroy()
+        except OSError:
+            pass
+
+    @staticmethod
+    def _unlink_if_unused(filepath: str):
+        """Delete a segment file unless another process holds it open (flock)."""
+        import fcntl
+        try:
+            fd = os.open(filepath, os.O_RDWR)
+        except (OSError, IOError):
+            return
+        try:
+            # Success if we can get an EXCLUSIVE lock
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            os.unlink(filepath)
+        except (OSError, IOError):
+            pass
+        finally:
+            os.close(fd)
+
     def _cleanup_orphans(self, force=False):
         """Scan for orphaned data segments and delete them if unused."""
         if sys.platform == "win32":
             return
-            
+
+        if force:
+            # Orphans only appear when the data segment rotates (resize): skip
+            # the scan (a glob plus the IPC lock) while the version is unchanged.
+            try:
+                if self._read_header()["seg_version"] == self._gc_seg_version:
+                    return
+            except ValueError:
+                return
+
         now = time.time()
         # Cooldown of 60 seconds unless forced (e.g. on write/resize)
         if not force and (now - self._last_gc_time) < 60:
             return
-        
+
         self._last_gc_time = now
 
-        try:
-            import fcntl
-            from .segment import _get_shm_dir
-        except ImportError:
+        from .segment import _get_shm_dir
+        # Under the IPC lock: a segment being created by a resize elsewhere is
+        # not flocked yet, and must not be mistaken for an orphan.
+        if self._ipc_lock.acquire(timeout_ms=1000) is False:
             return
+        try:
+            # The shared header is the source of truth: our own _seg_version may
+            # lag behind a resize done by another process.
+            try:
+                seg_version = self._read_header()["seg_version"]
+            except ValueError:
+                return
+            current = os.path.join(_get_shm_dir(), f"easyshm_{self._full_name}_d{seg_version}")
+            for filepath in self._data_segment_paths():
+                if filepath != current:
+                    self._unlink_if_unused(filepath)
+            self._gc_seg_version = seg_version
+        finally:
+            self._ipc_lock.release()
 
-        shm_dir = _get_shm_dir()
-        full_name = f"{self._user_prefix}{self.name}"
-        
-        # Patterns for segments and semaphores
-        # Data segments: easyshm_{full_name}_d*
-        # Control: easyshm_{full_name}_ctrl
-        # Sems: sem.easyshm_{full_name}_sig
-        patterns = [
-            os.path.join(shm_dir, f"easyshm_{full_name}_d*"),
-            os.path.join(shm_dir, f"easyshm_{full_name}_ctrl"),
-            os.path.join(shm_dir, f"sem.easyshm_{full_name}_sig"),
-        ]
-        
-        current_files = {
-            os.path.join(shm_dir, f"easyshm_{full_name}_d{self._seg_version}"),
-            os.path.join(shm_dir, f"easyshm_{full_name}_ctrl"),
-            os.path.join(shm_dir, f"sem.easyshm_{full_name}_sig"),
-        }
 
-        for pattern in patterns:
-            for filepath in glob.glob(pattern):
-                if filepath in current_files:
-                    continue
-                
-                # Check if it exists (it might have been deleted by another process already)
-                if not os.path.exists(filepath):
-                    continue
+def _data_segment_paths(full_name: str) -> List[str]:
+    """Backing files of every data segment version of a segment (POSIX)."""
+    from .segment import _get_shm_dir
 
-                try:
-                    fd = os.open(filepath, os.O_RDWR)
-                    try:
-                        # Success if we can get an EXCLUSIVE lock
-                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                        os.unlink(filepath)
-                    except (OSError, IOError):
-                        pass
-                    finally:
-                        os.close(fd)
-                except (OSError, IOError):
-                    pass
+    prefix = f"easyshm_{full_name}_d"
+    # Match only "<prefix><digits>" so a segment named "a" never picks up
+    # the files of a segment named "a_dog".
+    pattern = re.compile(re.escape(prefix) + r"\d+$")
+    return [
+        p for p in glob.glob(os.path.join(_get_shm_dir(), glob.escape(prefix) + "*"))
+        if pattern.match(os.path.basename(p))
+    ]

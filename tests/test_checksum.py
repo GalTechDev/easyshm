@@ -1,6 +1,9 @@
 import os
 import sys
-from easyshm import EasySHM
+
+from helpers import shm_file
+from easyshm import EasySHM, CorruptedSegmentError
+from easyshm.segment import Segment
 
 def test_checksum_valid():
     name = "test_checksum_ok"
@@ -19,10 +22,7 @@ def test_checksum_corruption():
     
     # Now manually corrupt the header
     # We know the control segment name
-    ctrl_name = f"easyshm_{name}_ctrl"
-    # We'll use a direct Segment object to tamper with it
-    from easyshm.segment import Segment
-    ctrl = Segment(ctrl_name, 256)
+    ctrl = Segment(os.path.basename(shm_file(name, "ctrl")), 256)
     
     # Read the header, flip one bit in the magic or version
     raw = ctrl.read(0, 36)
@@ -45,19 +45,35 @@ def test_checksum_corruption():
     ctrl.close()
     shm.destroy()
 
-if __name__ == "__main__":
-    # Manual run if pytest not available
+
+def test_join_corrupted_keeps_data():
+    """Joining a segment whose header is corrupted must raise, not wipe it."""
+    name = "test_checksum_join"
+    owner = EasySHM(name, size=1024)
+    owner.write(b"precious data")
+
+    ctrl = Segment(os.path.basename(shm_file(name, "ctrl")), 256)
+    raw = bytearray(ctrl.read(0, 40))
+    raw[5] ^= 0xFF  # corrupt seg_version, checksum no longer matches
+    ctrl.write(bytes(raw), 0)
+
     try:
-        test_checksum_valid()
-        print("Checksum valid test passed!")
-        
-        try:
-            test_checksum_corruption()
-            print("Checksum corruption test passed!")
-        except Exception as e:
-            print(f"Checksum corruption test FAILED (Expectedly?): {e}")
-            
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        EasySHM(name)
+        raise AssertionError("Joining a corrupted segment did not raise")
+    except CorruptedSegmentError as e:
+        assert "EasySHM.unlink" in str(e)
+
+    raw[5] ^= 0xFF  # repair: the data must still be there
+    ctrl.write(bytes(raw), 0)
+    assert owner.read() == b"precious data", "Data was wiped by the failed join"
+    ctrl.close()
+    owner.destroy()
+
+
+if __name__ == "__main__":
+    test_checksum_valid()
+    print("Checksum valid test passed!")
+    test_checksum_corruption()
+    print("Checksum corruption test passed!")
+    test_join_corrupted_keeps_data()
+    print("Corrupted join test passed!")

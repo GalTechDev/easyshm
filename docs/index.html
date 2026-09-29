@@ -1,98 +1,477 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="light" lang="fr">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EasySHM | High-Performance Shared Memory for Python</title>
-    <meta name="description" content="Zero-socket IPC with kernel signaling for ultra-fast Python communication.">
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>EASYSHM | Mémoire partagée haute performance pour Python</title>
+    <meta name="description" content="IPC zéro-socket avec signalisation noyau pour une communication inter-processus ultra-rapide en Python.">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="js/config.js"></script>
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-        rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
     <link rel="stylesheet" href="css/style.css">
 </head>
 
-<body>
-    <nav class="nav">
-        <div class="nav-container">
-            <div class="nav-logo">
-                <i class="ri-flashlight-line" style="color: var(--accent-green)"></i> EasySHM <span class="badge-v">v0.1.0</span>
-            </div>
-            <ul class="nav-links">
-                <li><a href="wiki.html" data-en="Documentation" data-fr="Documentation">Documentation</a></li>
-                <li><a href="https://github.com/GalTechDev/easyshm" target="_blank"><i class="ri-github-fill"></i>
-                        GitHub</a></li>
-                <li>
-                    <button onclick="toggleLang()" id="lang-btn" class="lang-toggle">FR</button>
-                </li>
-            </ul>
-        </div>
-    </nav>
+<body
+    class="bg-background text-on-surface font-body-base antialiased flex h-screen overflow-hidden selection:bg-primary-container selection:text-on-primary-container">
 
-    <section class="hero container">
-        <h1 class="hero-title" style="background: var(--gradient-tech); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">EasySHM</h1>
-        <p class="hero-subtitle"
-            data-en="Zero-socket IPC for Python. Share Giga-octets per second between processes with hardware-level latency."
-            data-fr="IPC Zéro-socket pour Python. Partagez des Giga-octets par seconde entre processus avec une latence matérielle.">
-            Zero-socket IPC for Python. Share Giga-octets per second between processes with hardware-level latency.
-        </p>
-        <div style="display: flex; gap: 1rem; justify-content: center;">
-            <button class="btn btn-primary"><i class="ri-terminal-line"></i> <span>pip install py-easyshm</span></button>
-            <a href="wiki.html" class="btn"><i class="ri-book-line"></i>
-                <span data-en="Read Wiki" data-fr="Lire le Wiki">Read Wiki</span></a>
-        </div>
-    </section>
+    <!-- Mobile Overlay -->
+    <div id="mobile-overlay" class="fixed inset-0 bg-black/50 z-30 hidden transition-opacity duration-300 opacity-0"></div>
 
-    <section class="container">
-        <div class="grid-2">
-            <div class="card">
-                <div class="card-icon"><i class="ri-cpu-line"></i></div>
-                <h3 data-en="Hardware Performance" data-fr="Performance Matérielle">Hardware Performance</h3>
-                <p data-en="Bypass the network stack entirely. Communicate via direct RAM access with <0.05ms latency."
-                    data-fr="Contournez entièrement la pile réseau. Communiquez via accès direct à la RAM avec une latence <0.05ms.">
-                    Bypass the network stack entirely. Communicate via direct RAM access with <0.05ms latency.</p>
+    <!-- SideNavBar -->
+    <aside id="sidebar"
+        class="h-screen w-64 fixed left-0 top-0 flex flex-col bg-surface-bright border-r border-outline-variant z-40 transition-transform duration-300 -translate-x-full md:translate-x-0">
+        <div class="p-6 border-b border-outline-variant relative">
+            <button id="close-menu-btn" class="md:hidden absolute top-4 right-4 text-outline hover:text-primary">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            <div class="flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined fill-icon text-primary">memory</span>
+                <h2 class="font-headline-md text-headline-md text-primary">EASYSHM</h2>
             </div>
-            <div class="card">
-                <div class="card-icon"><i class="ri-pulse-line" style="color: var(--accent-green)"></i></div>
-                <h3 data-en="Kernel Signaling" data-fr="Signalisation Noyau">Kernel Signaling</h3>
-                <p data-en="Instant wake-ups using Win32 Events and POSIX Semaphores. No busy-waiting, zero CPU waste."
-                    data-fr="Réveil instantané via Win32 Events et Sémaphores POSIX. Pas de boucle d'attente, consommation CPU nulle.">
-                    Instant wake-ups using Win32 Events and POSIX Semaphores. No busy-waiting, zero CPU waste.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon"><i class="ri-expand-diagonal-line" style="color: var(--accent-orange)"></i></div>
-                <h3 data-en="Auto-Grow Segments" data-fr="Segments Auto-Agrandissables">Auto-Grow Segments</h3>
-                <p data-en="Dynamic memory resizing that stays connected. Your buffer grows as your data expands."
-                    data-fr="Redimensionnement dynamique qui reste connecté. Votre buffer grandit selon vos besoins.">
-                    Dynamic memory resizing that stays connected. Your buffer grows as your data expands.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon"><i class="ri-table-line" style="color: var(--cloud-primary)"></i></div>
-                <h3 data-en="NumPy Zero-Copy" data-fr="NumPy Zero-Copy">NumPy Zero-Copy</h3>
-                <p data-en="Seamless integration with NumPy. View shared memory as an ndarray for instant mathematical operations."
-                    data-fr="Intégration native avec NumPy. Manipulez la mémoire partagée comme un ndarray pour des calculs instantanés.">
-                    Seamless integration with NumPy. View shared memory as an ndarray for instant mathematical operations.</p>
+            <div class="flex justify-center mt-3">
+                <span class="inline-block px-2 py-0.5 bg-[#eafdf0] text-[#006e0b] border border-[#a1e8af] font-label-caps text-[10px] uppercase">v0.1.0 · MIT</span>
             </div>
         </div>
-    </section>
 
-    <footer class="footer">
-        <div class="container">
-            <p class="footer-text">EasySHM — High-Performance Computing by GalTechDev</p>
-        </div>
-    </footer>
+        <nav class="flex-1 py-4 flex flex-col gap-1 overflow-y-auto">
+            <a href="index.html"
+                class="flex items-center gap-4 px-6 py-4 transition-all bg-primary-container text-on-primary-container border-r-4 border-primary">
+                <span class="material-symbols-outlined fill-icon">home</span>
+                <span class="font-label-caps text-label-caps uppercase" data-en="HOME" data-fr="ACCUEIL">ACCUEIL</span>
+            </a>
+            <a href="wiki.html"
+                class="flex items-center gap-4 px-6 py-4 text-on-surface-variant hover:bg-surface-container transition-all">
+                <span class="material-symbols-outlined">menu_book</span>
+                <span class="font-label-caps text-label-caps uppercase">DOCUMENTATION</span>
+            </a>
+            <a href="https://github.com/GalTechDev/easyshm" target="_blank" rel="noopener noreferrer"
+                class="flex items-center gap-4 px-6 py-4 text-on-surface-variant hover:bg-surface-container transition-all">
+                <span class="material-symbols-outlined">code</span>
+                <span class="font-label-caps text-label-caps uppercase">GITHUB</span>
+            </a>
+            <a href="https://pypi.org/project/py-easyshm/" target="_blank" rel="noopener noreferrer"
+                class="flex items-center gap-4 px-6 py-4 text-on-surface-variant hover:bg-surface-container transition-all">
+                <span class="material-symbols-outlined">inventory_2</span>
+                <span class="font-label-caps text-label-caps uppercase">PYPI</span>
+            </a>
+        </nav>
 
-    <script>
-        let currentLang = "en";
-        function toggleLang() {
-            currentLang = currentLang === "en" ? "fr" : "en";
-            document.getElementById("lang-btn").textContent = currentLang === "en" ? "FR" : "EN";
-            document.querySelectorAll("[data-en]").forEach(el => {
-                const text = el.getAttribute("data-" + currentLang);
-                if (text) el.innerHTML = text;
-            });
-        }
-    </script>
+        <a href="https://bio.galtech.cc" target="_blank" rel="noopener noreferrer"
+            class="p-6 border-t border-outline-variant flex items-center gap-3 text-on-surface-variant hover:text-primary transition-colors">
+            <span class="material-symbols-outlined">person</span>
+            <span class="font-label-caps text-[11px] uppercase">GalTech · Portfolio</span>
+        </a>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div id="main-scroll" class="flex-1 flex flex-col min-w-0 md:ml-64 h-screen overflow-y-scroll relative data-grid-pattern">
+
+        <!-- TopAppBar -->
+        <header
+            class="w-full top-0 sticky shrink-0 bg-surface/90 backdrop-blur-sm border-b border-outline-variant flex justify-between items-center h-16 px-gutter z-30">
+            <div class="flex items-center gap-4">
+                <button id="open-menu-btn"
+                    class="md:hidden text-primary p-2 -ml-2 rounded hover:bg-surface-container-low transition-colors">
+                    <span class="material-symbols-outlined">menu</span>
+                </button>
+                <h1 class="font-display-lg text-[20px] md:text-display-lg-mobile text-primary tracking-tighter uppercase"
+                    data-en="OVERVIEW" data-fr="APERÇU">APERÇU</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="lang-btn"
+                    class="flex items-center gap-2 px-4 py-2 bg-surface-container-low hover:bg-surface-container border border-outline-variant rounded-full text-primary shadow-sm transition-all hover:shadow-md"
+                    title="Langue / Language">
+                    <span class="font-label-caps text-label-caps">EN</span>
+                    <span class="material-symbols-outlined text-[20px]">translate</span>
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-1 flex flex-col fade-in">
+            <div class="w-full p-margin-mobile md:p-gutter">
+                <div class="max-w-container-max mx-auto w-full">
+
+                    <!-- ============================================== -->
+                    <!-- HERO                                           -->
+                    <!-- ============================================== -->
+                    <section class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center py-8 md:py-16">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-3 mb-6">
+                                <span class="font-code-snippet text-[12px] text-secondary border border-secondary px-3 py-1">PYTHON · IPC</span>
+                                <span class="font-label-caps text-[12px] text-on-surface-variant flex items-center gap-2">
+                                    <span class="relative flex w-2 h-2">
+                                        <span class="animate-ping-slow absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75"></span>
+                                        <span class="relative inline-flex rounded-full h-2 w-2 bg-[#10b981]"></span>
+                                    </span>
+                                    WINDOWS · LINUX · MACOS
+                                </span>
+                            </div>
+                            <h2 class="font-display-lg text-[40px] md:text-display-lg text-on-background uppercase tracking-tight leading-tight mb-6">
+                                Easy<span class="text-primary">SHM</span>
+                            </h2>
+                            <p class="text-[18px] md:text-[20px] font-medium text-primary mb-4"
+                                data-en="Zero-socket IPC for Python."
+                                data-fr="IPC zéro-socket pour Python.">IPC zéro-socket pour Python.</p>
+                            <p class="font-body-base text-body-base text-on-surface-variant mb-8 max-w-xl"
+                                data-en="Share gigabytes per second between processes directly through RAM, with kernel-level wake-ups in a few tens of microseconds. No port, no network stack."
+                                data-fr="Partagez des giga-octets par seconde entre processus directement via la RAM, avec un réveil au niveau du noyau en quelques dizaines de microsecondes. Aucun port, aucune pile réseau.">
+                                Partagez des giga-octets par seconde entre processus directement via la RAM, avec un réveil au niveau du noyau en quelques dizaines de microsecondes. Aucun port, aucune pile réseau.
+                            </p>
+
+                            <!-- Install box -->
+                            <div class="flex items-stretch border border-outline-variant bg-surface-container-lowest shadow-sm max-w-md mb-6">
+                                <span class="flex items-center px-4 border-r border-outline-variant text-primary font-code-snippet">$</span>
+                                <code class="flex-1 flex items-center px-4 py-3 font-code-snippet text-[14px] text-on-surface">pip install py-easyshm</code>
+                                <button data-copy="pip install py-easyshm"
+                                    class="px-4 border-l border-outline-variant text-outline hover:text-primary hover:bg-surface-container-low transition-colors"
+                                    title="Copier">
+                                    <span class="material-symbols-outlined text-[20px]">content_copy</span>
+                                </button>
+                            </div>
+
+                            <div class="flex flex-wrap gap-3">
+                                <a href="wiki.html"
+                                    class="flex items-center gap-2 px-5 py-3 bg-primary text-on-primary font-label-caps text-label-caps uppercase shadow-sm hover:shadow-md hover:bg-[#00429c] transition-all">
+                                    <span class="material-symbols-outlined text-[18px]">menu_book</span>
+                                    <span data-en="READ THE DOCS" data-fr="LIRE LA DOC">LIRE LA DOC</span>
+                                </a>
+                                <a href="https://github.com/GalTechDev/easyshm" target="_blank" rel="noopener noreferrer"
+                                    class="flex items-center gap-2 px-5 py-3 bg-surface-container-lowest border border-outline-variant text-primary font-label-caps text-label-caps uppercase hover:border-primary transition-all">
+                                    <span class="material-symbols-outlined text-[18px]">code</span>
+                                    GITHUB
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Diagram -->
+                        <div class="border border-outline-variant bg-surface-container-lowest shadow-sm flex flex-col">
+                            <div class="border-b border-outline-variant p-4 flex justify-between items-center bg-surface">
+                                <span class="font-label-caps text-[12px] text-primary">SHARED_MEMORY_BUS</span>
+                                <span class="font-code-snippet text-[10px] text-[#10b981] flex items-center gap-2">
+                                    <span class="inline-block w-2 h-2 rounded-full bg-[#10b981]"></span>ONLINE
+                                </span>
+                            </div>
+                            <div class="relative bg-surface-container-low">
+                                <svg viewBox="0 0 480 300" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+                                    <!-- lignes -->
+                                    <g fill="none" stroke-width="2">
+                                        <path class="bus-line" stroke="#0056c6" d="M110,70 L110,150 L180,150" />
+                                        <path class="bus-line" stroke="#0056c6" d="M370,70 L370,150 L300,150" />
+                                        <path class="bus-line" stroke="#006e0b" d="M240,190 L240,240" />
+                                    </g>
+                                    <!-- processus A -->
+                                    <g transform="translate(40,30)">
+                                        <rect width="140" height="40" fill="#ffffff" stroke="#c2c6d8" />
+                                        <text x="70" y="25" text-anchor="middle" font-family="JetBrains Mono" font-size="12" font-weight="600" fill="#191c1e">PROCESS_A</text>
+                                    </g>
+                                    <!-- processus B -->
+                                    <g transform="translate(300,30)">
+                                        <rect width="140" height="40" fill="#ffffff" stroke="#c2c6d8" />
+                                        <text x="70" y="25" text-anchor="middle" font-family="JetBrains Mono" font-size="12" font-weight="600" fill="#191c1e">PROCESS_B</text>
+                                    </g>
+                                    <!-- segment -->
+                                    <g transform="translate(180,110)">
+                                        <rect width="120" height="80" fill="#ffffff" stroke="#0056c6" stroke-width="2" />
+                                        <rect width="120" height="20" fill="#0056c6" />
+                                        <text x="60" y="14" text-anchor="middle" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="#ffffff">/dev/shm</text>
+                                        <g fill="#d9e2ff">
+                                            <rect x="10" y="30" width="22" height="16" /><rect x="36" y="30" width="22" height="16" />
+                                            <rect x="62" y="30" width="22" height="16" /><rect x="88" y="30" width="22" height="16" />
+                                            <rect x="10" y="52" width="22" height="16" /><rect x="36" y="52" width="22" height="16" />
+                                        </g>
+                                        <rect x="62" y="52" width="22" height="16" fill="#0056c6" opacity="0.6" />
+                                    </g>
+                                    <!-- kernel -->
+                                    <g transform="translate(160,240)">
+                                        <rect width="160" height="36" fill="#eafdf0" stroke="#a1e8af" />
+                                        <text x="80" y="23" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="600" fill="#006e0b">KERNEL SIGNAL</text>
+                                    </g>
+                                    <!-- paquets animés -->
+                                    <circle r="4" fill="#0056c6">
+                                        <animateMotion dur="2.4s" repeatCount="indefinite" path="M110,70 L110,150 L180,150" />
+                                    </circle>
+                                    <circle r="4" fill="#0056c6">
+                                        <animateMotion dur="2.4s" begin="1.2s" repeatCount="indefinite" path="M300,150 L370,150 L370,70" />
+                                    </circle>
+                                </svg>
+                            </div>
+                            <div class="border-t border-outline-variant p-3 font-code-snippet text-[11px] text-outline flex justify-between">
+                                <span>write() → emit()</span>
+                                <span>wait_update() → read()</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- STATS                                          -->
+                    <!-- ============================================== -->
+                    <section class="grid grid-cols-2 md:grid-cols-4 border border-outline-variant bg-surface-container-lowest shadow-sm mb-16">
+                        <div class="p-6 border-b md:border-b-0 border-r border-outline-variant">
+                            <div class="font-display-lg text-[28px] text-primary">35<span class="text-[16px]">µs</span></div>
+                            <div class="font-label-caps text-[11px] text-outline mt-2 uppercase" data-en="Median latency" data-fr="Latence médiane">Latence médiane</div>
+                        </div>
+                        <div class="p-6 border-b md:border-b-0 md:border-r border-outline-variant">
+                            <div class="font-display-lg text-[28px] text-primary">0</div>
+                            <div class="font-label-caps text-[11px] text-outline mt-2 uppercase" data-en="Open sockets" data-fr="Socket ouvert">Socket ouvert</div>
+                        </div>
+                        <div class="p-6 border-r border-outline-variant">
+                            <div class="font-display-lg text-[28px] text-primary">0-COPY</div>
+                            <div class="font-label-caps text-[11px] text-outline mt-2 uppercase">NumPy · Torch · ctypes</div>
+                        </div>
+                        <div class="p-6">
+                            <div class="font-display-lg text-[28px] text-secondary">~0%</div>
+                            <div class="font-label-caps text-[11px] text-outline mt-2 uppercase" data-en="Idle CPU" data-fr="CPU au repos">CPU au repos</div>
+                        </div>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- FEATURES                                       -->
+                    <!-- ============================================== -->
+                    <section class="mb-16">
+                        <div class="mb-8 border-b border-outline-variant pb-4">
+                            <h2 class="font-display-lg text-display-lg-mobile md:text-[32px] text-on-background uppercase tracking-tight"
+                                data-en="FEATURES" data-fr="FONCTIONNALITÉS">FONCTIONNALITÉS</h2>
+                            <p class="font-body-base text-body-base text-on-surface-variant mt-2"
+                                data-en="Everything needed to move data between processes, without the network."
+                                data-fr="Tout le nécessaire pour faire circuler des données entre processus, sans le réseau.">
+                                Tout le nécessaire pour faire circuler des données entre processus, sans le réseau.</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-base">
+                            <!-- Card -->
+                            <div class="flex flex-col bg-surface border border-outline-variant group hover:border-primary transition-colors duration-300 shadow-sm">
+                                <div class="p-4 border-b border-outline-variant flex justify-between items-start bg-surface-bright">
+                                    <h3 class="font-headline-md text-[16px] text-primary uppercase" data-en="Hardware speed" data-fr="Vitesse matérielle">Vitesse matérielle</h3>
+                                    <span class="material-symbols-outlined text-primary">speed</span>
+                                </div>
+                                <div class="p-4 flex-1 flex flex-col gap-4">
+                                    <p class="font-body-sm text-[14px] text-on-surface-variant"
+                                        data-en="Bypass the network stack entirely: processes read and write the same physical RAM pages."
+                                        data-fr="Contournez entièrement la pile réseau : les processus lisent et écrivent les mêmes pages de RAM physique.">
+                                        Contournez entièrement la pile réseau : les processus lisent et écrivent les mêmes pages de RAM physique.</p>
+                                    <div class="mt-auto font-code-snippet text-[11px] flex flex-wrap gap-2 text-on-surface-variant">
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">mmap</span>
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright">~35 µs</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col bg-surface border border-outline-variant group hover:border-primary transition-colors duration-300 shadow-sm">
+                                <div class="p-4 border-b border-outline-variant flex justify-between items-start bg-surface-bright">
+                                    <h3 class="font-headline-md text-[16px] text-primary uppercase" data-en="Kernel signaling" data-fr="Signalisation noyau">Signalisation noyau</h3>
+                                    <span class="material-symbols-outlined text-primary">notifications_active</span>
+                                </div>
+                                <div class="p-4 flex-1 flex flex-col gap-4">
+                                    <p class="font-body-sm text-[14px] text-on-surface-variant"
+                                        data-en="One write wakes every waiting process at once: a futex on Linux, Named Events on Windows, semaphores on macOS. No busy-waiting."
+                                        data-fr="Une écriture réveille d'un coup tous les processus en attente : futex sous Linux, Named Events sous Windows, sémaphores sous macOS. Pas d'attente active.">
+                                        Une écriture réveille d'un coup tous les processus en attente : futex sous Linux, Named Events sous Windows, sémaphores sous macOS. Pas d'attente active.</p>
+                                    <div class="mt-auto font-code-snippet text-[11px] flex flex-wrap gap-2 text-on-surface-variant">
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">wait_update()</span>
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">on_update()</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col bg-surface border border-outline-variant group hover:border-primary transition-colors duration-300 shadow-sm">
+                                <div class="p-4 border-b border-outline-variant flex justify-between items-start bg-surface-bright">
+                                    <h3 class="font-headline-md text-[16px] text-primary uppercase">Auto-grow</h3>
+                                    <span class="material-symbols-outlined text-primary">open_in_full</span>
+                                </div>
+                                <div class="p-4 flex-1 flex flex-col gap-4">
+                                    <p class="font-body-sm text-[14px] text-on-surface-variant"
+                                        data-en="Segments resize on the fly while every process stays connected. Optional auto-shrink frees memory back."
+                                        data-fr="Les segments se redimensionnent à la volée sans déconnecter les processus. L'auto-shrink optionnel libère la mémoire.">
+                                        Les segments se redimensionnent à la volée sans déconnecter les processus. L'auto-shrink optionnel libère la mémoire.</p>
+                                    <div class="mt-auto font-code-snippet text-[11px] flex flex-wrap gap-2 text-on-surface-variant">
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">resize()</span>
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">on_resize()</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col bg-surface border border-outline-variant group hover:border-primary transition-colors duration-300 shadow-sm">
+                                <div class="p-4 border-b border-outline-variant flex justify-between items-start bg-surface-bright">
+                                    <h3 class="font-headline-md text-[16px] text-primary uppercase" data-en="Zero-copy views" data-fr="Vues zéro-copie">Vues zéro-copie</h3>
+                                    <span class="material-symbols-outlined text-primary">grid_on</span>
+                                </div>
+                                <div class="p-4 flex-1 flex flex-col gap-4">
+                                    <p class="font-body-sm text-[14px] text-on-surface-variant"
+                                        data-en="Map NumPy arrays, PyTorch tensors or C structures directly onto the shared buffer, or register your own view."
+                                        data-fr="Mappez des tableaux NumPy, des tenseurs PyTorch ou des structures C directement sur le buffer partagé, ou enregistrez votre propre vue.">
+                                        Mappez des tableaux NumPy, des tenseurs PyTorch ou des structures C directement sur le buffer partagé, ou enregistrez votre propre vue.</p>
+                                    <div class="mt-auto font-code-snippet text-[11px] flex flex-wrap gap-2 text-on-surface-variant">
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">numpy</span>
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">torch</span>
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">struct</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col bg-surface border border-outline-variant group hover:border-primary transition-colors duration-300 shadow-sm">
+                                <div class="p-4 border-b border-outline-variant flex justify-between items-start bg-surface-bright">
+                                    <h3 class="font-headline-md text-[16px] text-primary uppercase" data-en="Process-safe" data-fr="Process-safe">Process-safe</h3>
+                                    <span class="material-symbols-outlined text-primary">lock</span>
+                                </div>
+                                <div class="p-4 flex-1 flex flex-col gap-4">
+                                    <p class="font-body-sm text-[14px] text-on-surface-variant"
+                                        data-en="Every access goes through an IPC mutex plus a thread lock. Mutexes abandoned by a crashed process are recovered automatically."
+                                        data-fr="Chaque accès passe par un mutex IPC et un verrou de thread. Les mutex abandonnés par un processus planté sont récupérés automatiquement.">
+                                        Chaque accès passe par un mutex IPC et un verrou de thread. Les mutex abandonnés par un processus planté sont récupérés automatiquement.</p>
+                                    <div class="mt-auto font-code-snippet text-[11px] flex flex-wrap gap-2 text-on-surface-variant">
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">mutex</span>
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">CRC32</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col bg-surface border border-outline-variant group hover:border-primary transition-colors duration-300 shadow-sm">
+                                <div class="p-4 border-b border-outline-variant flex justify-between items-start bg-surface-bright">
+                                    <h3 class="font-headline-md text-[16px] text-primary uppercase" data-en="Pinned memory" data-fr="Mémoire verrouillée">Mémoire verrouillée</h3>
+                                    <span class="material-symbols-outlined text-primary">push_pin</span>
+                                </div>
+                                <div class="p-4 flex-1 flex flex-col gap-4">
+                                    <p class="font-body-sm text-[14px] text-on-surface-variant"
+                                        data-en="Optionally lock segments in physical RAM so the OS never swaps them out, for predictable latency."
+                                        data-fr="Verrouillez optionnellement les segments en RAM physique pour que l'OS ne les swappe jamais, pour une latence prévisible.">
+                                        Verrouillez optionnellement les segments en RAM physique pour que l'OS ne les swappe jamais, pour une latence prévisible.</p>
+                                    <div class="mt-auto font-code-snippet text-[11px] flex flex-wrap gap-2 text-on-surface-variant">
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">mlock</span>
+                                        <span class="border border-outline-variant px-2 py-1 bg-surface-bright uppercase">VirtualLock</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- QUICK START                                    -->
+                    <!-- ============================================== -->
+                    <section class="mb-16 grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div>
+                            <div class="mb-6 border-b border-outline-variant pb-4">
+                                <h2 class="font-display-lg text-display-lg-mobile md:text-[32px] text-on-background uppercase tracking-tight"
+                                    data-en="QUICK START" data-fr="DÉMARRAGE RAPIDE">DÉMARRAGE RAPIDE</h2>
+                            </div>
+                            <ul class="font-body-base text-[15px] text-on-surface-variant space-y-4 list-none">
+                                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-[16px] text-primary mt-1">play_arrow</span>
+                                    <span data-en="Every process opening the same <strong class=&quot;text-on-surface&quot;>name</strong> shares the same memory. The first one creates it, the others join it."
+                                        data-fr="Tous les processus qui ouvrent le même <strong class=&quot;text-on-surface&quot;>nom</strong> partagent la même mémoire. Le premier la crée, les autres la rejoignent.">
+                                        Tous les processus qui ouvrent le même <strong class="text-on-surface">nom</strong> partagent la même mémoire. Le premier la crée, les autres la rejoignent.</span></li>
+                                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-[16px] text-primary mt-1">play_arrow</span>
+                                    <span data-en="<code class=&quot;font-code-snippet text-primary&quot;>write()</code> wakes up every process waiting on the segment."
+                                        data-fr="<code class=&quot;font-code-snippet text-primary&quot;>write()</code> réveille tous les processus en attente sur le segment.">
+                                        <code class="font-code-snippet text-primary">write()</code> réveille tous les processus en attente sur le segment.</span></li>
+                                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-[16px] text-primary mt-1">play_arrow</span>
+                                    <span data-en="Views give you typed, zero-copy access: modifying the array modifies the shared memory."
+                                        data-fr="Les vues donnent un accès typé et zéro-copie : modifier le tableau modifie la mémoire partagée.">
+                                        Les vues donnent un accès typé et zéro-copie : modifier le tableau modifie la mémoire partagée.</span></li>
+                            </ul>
+                            <a href="wiki.html"
+                                class="inline-flex items-center gap-2 mt-8 font-label-caps text-label-caps text-primary uppercase hover:underline">
+                                <span data-en="FULL API REFERENCE" data-fr="RÉFÉRENCE API COMPLÈTE">RÉFÉRENCE API COMPLÈTE</span>
+                                <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+                            </a>
+                        </div>
+
+                        <div class="bg-surface-container-lowest border-l-4 border-secondary p-6 shadow-sm">
+                            <h4 class="font-code-snippet text-[14px] text-secondary uppercase mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px]">code</span>
+                                quickstart.py
+                            </h4>
+                            <div class="bg-surface-container p-4 overflow-x-auto">
+<pre class="code-block"><span class="kw">from</span> easyshm <span class="kw">import</span> EasySHM
+<span class="kw">import</span> ctypes
+
+<span class="cm"># Crée ou rejoint un segment partagé</span>
+shm = <span class="fn">EasySHM</span>(<span class="str">"my_data"</span>, size=<span class="num">1024</span>)
+
+<span class="cm"># 1. Tableau NumPy (zéro-copie)</span>
+arr = shm.<span class="fn">as_view</span>(<span class="str">"numpy"</span>, shape=(<span class="num">10</span>,), dtype=<span class="str">"float32"</span>)
+arr[<span class="num">0</span>] = <span class="num">42.0</span>
+
+<span class="cm"># 2. Structure C (zéro-copie)</span>
+<span class="kw">class</span> <span class="fn">Point</span>(ctypes.Structure):
+    _fields_ = [(<span class="str">"x"</span>, ctypes.c_int), (<span class="str">"y"</span>, ctypes.c_int)]
+
+p = shm.<span class="fn">as_view</span>(<span class="str">"struct"</span>, type=Point)
+p.x = <span class="num">100</span>
+
+<span class="cm"># 3. Attendre une mise à jour d'un autre processus</span>
+<span class="kw">if</span> shm.<span class="fn">wait_update</span>(timeout=<span class="num">5.0</span>):
+    <span class="fn">print</span>(shm.<span class="fn">read</span>())</pre>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- PERFORMANCE                                    -->
+                    <!-- ============================================== -->
+                    <section class="mb-16">
+                        <div class="mb-8 border-b border-outline-variant pb-4">
+                            <h2 class="font-display-lg text-display-lg-mobile md:text-[32px] text-on-background uppercase tracking-tight">PERFORMANCE</h2>
+                            <p class="font-body-base text-body-base text-on-surface-variant mt-2"
+                                data-en="Measured, not promised: two processes, thousands of round trips, compared with a localhost TCP socket using the same protocol."
+                                data-fr="Mesuré, pas promis : deux processus, des milliers d'allers-retours, comparés à un socket TCP local avec le même protocole.">
+                                Mesuré, pas promis : deux processus, des milliers d'allers-retours, comparés à un socket TCP local avec le même protocole.</p>
+                        </div>
+                        <div class="border border-outline-variant bg-surface-container-lowest shadow-sm overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="bg-surface border-b border-outline-variant">
+                                    <tr class="font-label-caps text-[11px] text-outline uppercase">
+                                        <th class="p-4" data-en="Measure" data-fr="Mesure">Mesure</th>
+                                        <th class="p-4">EasySHM</th>
+                                        <th class="p-4">TCP localhost</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="font-code-snippet text-[13px] text-on-surface-variant">
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4" data-en="Wake-up latency, one-way (median / p99)" data-fr="Latence de réveil, aller simple (médiane / p99)">Latence de réveil, aller simple (médiane / p99)</td>
+                                        <td class="p-4 font-bold text-primary">35 µs / 130 µs</td>
+                                        <td class="p-4">17 µs / 80 µs</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4" data-en="1 MB round trip (median)" data-fr="Aller-retour 1 Mo (médiane)">Aller-retour 1 Mo (médiane)</td>
+                                        <td class="p-4 font-bold text-primary">~170–190 µs</td>
+                                        <td class="p-4">~110–160 µs</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4" data-en="Broadcast to N processes" data-fr="Diffusion vers N processus">Diffusion vers N processus</td>
+                                        <td class="p-4 font-bold text-secondary" data-en="1 write, all woken at once" data-fr="1 écriture, tous réveillés d'un coup">1 écriture, tous réveillés d'un coup</td>
+                                        <td class="p-4" data-en="N sends" data-fr="N envois">N envois</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-4" data-en="Idle CPU, open segment" data-fr="CPU au repos, segment ouvert">CPU au repos, segment ouvert</td>
+                                        <td class="p-4 font-bold text-secondary">0 %</td>
+                                        <td class="p-4">0 %</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="font-body-sm text-[13px] text-outline mt-4"
+                            data-en="Linux (WSL2), Python 3.12, 12 CPU. Latency is dominated by Python itself: for tiny messages a localhost socket is still faster. EasySHM shines when several processes share the same large state without resending it. Run <code>python benchmarks/latency.py</code> to measure your machine."
+                            data-fr="Linux (WSL2), Python 3.12, 12 CPU. La latence est dominée par Python lui-même : pour de tout petits messages, un socket local reste plus rapide. EasySHM brille quand plusieurs processus partagent le même gros état sans le renvoyer. Lancez <code>python benchmarks/latency.py</code> pour mesurer votre machine.">
+                            Linux (WSL2), Python 3.12, 12 CPU. La latence est dominée par Python lui-même : pour de tout petits messages, un socket local reste plus rapide. EasySHM brille quand plusieurs processus partagent le même gros état sans le renvoyer. Lancez <code>python benchmarks/latency.py</code> pour mesurer votre machine.</p>
+                    </section>
+                </div>
+            </div>
+
+            <footer class="w-full p-4 text-center mt-auto bg-surface border-t border-outline-variant">
+                <p class="font-body-sm text-on-surface-variant">
+                    © 2026 <a href="https://bio.galtech.cc" target="_blank" rel="noopener noreferrer" class="hover:text-primary">Maxence MOREAU</a>
+                    · <span data-en="Part of the <a href=&quot;https://galtechdev.github.io/easysync/&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot; class=&quot;text-primary hover:underline&quot;>EasySync</a> ecosystem"
+                        data-fr="Membre de l'écosystème <a href=&quot;https://galtechdev.github.io/easysync/&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot; class=&quot;text-primary hover:underline&quot;>EasySync</a>">Membre de l'écosystème <a href="https://galtechdev.github.io/easysync/" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">EasySync</a></span>
+                </p>
+            </footer>
+        </main>
+    </div>
+
+    <script src="js/app.js"></script>
 </body>
+
 </html>

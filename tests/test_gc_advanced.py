@@ -2,6 +2,7 @@ import os
 import sys
 import unittest
 from unittest.mock import patch
+import helpers  # noqa: F401  (makes the local package importable)
 from easyshm import EasySHM
 
 class TestGCAndIsolation(unittest.TestCase):
@@ -22,8 +23,9 @@ class TestGCAndIsolation(unittest.TestCase):
         # Trigger an automatic cleanup (not forced)
         shm._cleanup_orphans(force=False)
         
-        # Trigger a forced cleanup
-        shm.write(b"data") # This calls force=True
+        # A resize creates an orphan segment, which triggers a forced cleanup
+        # (plain writes that do not resize skip the scan on purpose)
+        shm.write(b"x" * 10_000)
         
         if sys.platform != "win32":
             self.assertGreater(shm._last_gc_time, initial_gc_time)

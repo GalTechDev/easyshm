@@ -6,7 +6,10 @@ No root/admin rights required.
 """
 
 import os
+import errno
 import fcntl
+import platform
+import threading
 import tempfile
 import time
 import sys
@@ -109,7 +112,7 @@ class PosixSignal(Signal):
             for _ in range(16):
                 PosixSignal._lib.sem_post(self._sem)
 
-    def wait(self, timeout_ms: int = None) -> bool:
+    def wait(self, timeout_ms: int = None, expected: int = None) -> bool:
         """Wait on the semaphore. Returns True if signaled, False on timeout."""
         if not self._sem:
             return False
@@ -154,6 +157,74 @@ class PosixSignal(Signal):
             self._sem_name = None
 
 
+# --- Linux futex: true broadcast on a word of shared memory ---
+
+_SYS_FUTEX = {"x86_64": 202, "amd64": 202, "aarch64": 98, "arm64": 98}.get(platform.machine().lower())
+_FUTEX_WAIT = 0
+_FUTEX_WAKE = 1
+_WAKE_ALL = 0x7FFFFFFF
+
+
+class FutexSignal(Signal):
+    """Inter-process signal using a Linux futex on the header's write_seq word.
+
+    Unlike a semaphore, FUTEX_WAKE wakes every waiter at once and leaves no
+    pending token behind, so a write costs one syscall and never causes
+    spurious wake-ups. wait(expected=seq) returns immediately if the word no
+    longer holds `seq`, which rules out lost wake-ups. Nothing to clean up:
+    the futex lives in the control segment itself.
+    """
+
+    _libc = None
+
+    @staticmethod
+    def available() -> bool:
+        return sys.platform.startswith("linux") and _SYS_FUTEX is not None
+
+    def __init__(self, name: str, buffer, offset: int):
+        super().__init__(name)
+        if FutexSignal._libc is None:
+            libc = ctypes.CDLL(None, use_errno=True)
+            libc.syscall.restype = ctypes.c_long
+            FutexSignal._libc = libc
+        # Keeps a buffer export on the mmap: close() must run before the
+        # control segment is closed.
+        self._word = ctypes.c_uint32.from_buffer(buffer, offset)
+        self._addr = ctypes.addressof(self._word)
+
+    def _futex(self, op, val, timeout=None):
+        return FutexSignal._libc.syscall(
+            ctypes.c_long(_SYS_FUTEX), ctypes.c_void_p(self._addr), ctypes.c_int(op),
+            ctypes.c_uint32(val), timeout, ctypes.c_void_p(0), ctypes.c_uint32(0),
+        )
+
+    def emit(self):
+        """Wake every process waiting on the segment."""
+        if self._word is not None:
+            self._futex(_FUTEX_WAKE, _WAKE_ALL)
+
+    def wait(self, timeout_ms: int = None, expected: int = None) -> bool:
+        """Sleep until the word changes from `expected` (default: its current value)."""
+        if self._word is None:
+            return False
+        if expected is None:
+            expected = self._word.value
+        ts = None
+        if timeout_ms is not None:
+            ts = _timespec(timeout_ms // 1000, (timeout_ms % 1000) * 1_000_000)
+        r = self._futex(_FUTEX_WAIT, expected & 0xFFFFFFFF, ctypes.byref(ts) if ts else None)
+        if r == 0:
+            return True
+        return ctypes.get_errno() == errno.EAGAIN  # already changed
+
+    def close(self):
+        """Release the view on the shared word."""
+        self._word = None
+
+    def destroy(self):
+        self.close()
+
+
 def _get_shm_dir():
     if os.path.isdir("/dev/shm"):
         return "/dev/shm"
@@ -161,39 +232,98 @@ def _get_shm_dir():
 
 
 class PosixMutex(Mutex):
-    """File-based locking (flock) for inter-process mutual exclusion on POSIX."""
+    """File-based locking (flock) for inter-process mutual exclusion on POSIX.
+
+    The owner writes its PID into the lock file and clears it before
+    releasing. flock() is dropped silently by the kernel when a process dies,
+    so finding a PID in the file right after acquiring means the previous
+    owner crashed while holding the lock: acquire() then returns "abandoned",
+    like a Windows abandoned mutex.
+    """
 
     def __init__(self, name: str):
         super().__init__(name)
         shm_dir = _get_shm_dir()
         self._path = os.path.join(shm_dir, f"easyshm_mtx_{name}")
+        self._fd = None
+        # flock() does not exclude threads sharing the same file descriptor
+        # (e.g. the listener thread and the main thread of one EasySHM), so
+        # serialize them first.
+        self._thread_lock = threading.Lock()
+        self._open()
+
+    def _open(self):
         flags = os.O_CREAT | os.O_RDWR
         if hasattr(os, 'O_CLOEXEC'):
             flags |= os.O_CLOEXEC
         self._fd = os.open(self._path, flags, 0o666)
 
-    def acquire(self, timeout_ms: int = None) -> bool:
-        if timeout_ms is None:
-            fcntl.flock(self._fd, fcntl.LOCK_EX)
+    def _is_stale(self) -> bool:
+        """True if the lock file was unlinked (or replaced) by destroy() in another process."""
+        try:
+            return os.stat(self._path).st_ino != os.fstat(self._fd).st_ino
+        except FileNotFoundError:
             return True
-        else:
-            end = time.time() + (timeout_ms / 1000.0)
-            while time.time() < end:
-                try:
-                    fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    return True
-                except (IOError, OSError, BlockingIOError):
-                    time.sleep(0.005)
+
+    def acquire(self, timeout_ms: int = None) -> bool | str:
+        if not self._thread_lock.acquire(timeout=-1 if timeout_ms is None else timeout_ms / 1000.0):
             return False
+        try:
+            if self._acquire_file(timeout_ms):
+                abandoned = bool(os.pread(self._fd, 32, 0).strip())
+                os.ftruncate(self._fd, 0)
+                os.pwrite(self._fd, str(os.getpid()).encode(), 0)
+                return "abandoned" if abandoned else True
+        except BaseException:
+            self._thread_lock.release()
+            raise
+        self._thread_lock.release()
+        return False
+
+    def _acquire_file(self, timeout_ms: int = None) -> bool:
+        end = None if timeout_ms is None else time.time() + (timeout_ms / 1000.0)
+        while True:
+            if self._fd is None:
+                self._open()
+            if end is None:
+                fcntl.flock(self._fd, fcntl.LOCK_EX)
+            else:
+                delay = 0.00005  # Back off from 50 µs to 5 ms: short waits stay short
+                while True:
+                    try:
+                        fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except (IOError, OSError, BlockingIOError):
+                        if time.time() >= end:
+                            return False
+                        time.sleep(delay)
+                        delay = min(delay * 2, 0.005)
+            # The last user may have deleted the lock file while we were waiting:
+            # the lock we hold is then on a dead inode, so switch to the new file.
+            if not self._is_stale():
+                return True
+            os.close(self._fd)
+            self._fd = None
 
     def release(self):
+        if not self._thread_lock.locked():
+            return  # Not held: never clear another owner's PID
         if self._fd is not None:
             try:
+                os.ftruncate(self._fd, 0)  # Clean release: no owner left behind
                 fcntl.flock(self._fd, fcntl.LOCK_UN)
             except (IOError, OSError):
                 pass
+        self._thread_lock.release()
 
     def close(self):
         if self._fd is not None:
             os.close(self._fd)
             self._fd = None
+
+    def destroy(self):
+        """Delete the lock file. Must be called while holding the lock."""
+        try:
+            os.unlink(self._path)
+        except FileNotFoundError:
+            pass

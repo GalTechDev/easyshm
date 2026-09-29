@@ -3,6 +3,8 @@ import sys
 import time
 import subprocess
 import tempfile
+
+from helpers import child_env, shm_file
 from easyshm import EasySHM
 
 def test_startup_race():
@@ -20,8 +22,7 @@ def test_startup_race():
     
     processes = []
     # Simultaneous initialization of 10 processes
-    env = os.environ.copy()
-    env["PYTHONPATH"] = os.getcwd() + os.pathsep + env.get("PYTHONPATH", "")
+    env = child_env()
     for i in range(10):
         code = f"import sys; from easyshm import EasySHM; s=EasySHM('{name}', size=1024); s.write(b'X', offset={i}); s.close()"
         p = subprocess.Popen([sys.executable, "-c", code], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -56,16 +57,12 @@ def test_permissions():
     shm = EasySHM(name, mode=mode_target)
     
     # Check backing file in /dev/shm or temp
-    shm_dir = "/dev/shm" if os.path.isdir("/dev/shm") else tempfile.gettempdir()
-    ctrl_path = os.path.join(shm_dir, f"easyshm_{name}_ctrl")
-    
-    if os.path.exists(ctrl_path):
-        actual_mode = os.stat(ctrl_path).st_mode & 0o777
-        print(f"File: {ctrl_path}, Mode: {oct(actual_mode)}")
-        assert actual_mode == mode_target
-    else:
-        print(f"Warning: could not find backing file at {ctrl_path}")
-        
+    ctrl_path = shm_file(name, "ctrl")
+    assert os.path.exists(ctrl_path), f"Backing file not found: {ctrl_path}"
+    actual_mode = os.stat(ctrl_path).st_mode & 0o777
+    print(f"File: {ctrl_path}, Mode: {oct(actual_mode)}")
+    assert actual_mode == mode_target, f"Mode {oct(actual_mode)} != {oct(mode_target)}"
+
     shm.destroy()
     print("Permissions test passed!")
 

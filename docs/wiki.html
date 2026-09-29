@@ -1,199 +1,556 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="light" lang="fr">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EasySHM Wiki | Documentation</title>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>EASYSHM | Documentation</title>
+    <meta name="description" content="Référence complète de l'API EasySHM : segments, vues zéro-copie, signalisation et détails de plateforme.">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="js/config.js"></script>
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-        rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
     <link rel="stylesheet" href="css/style.css">
 </head>
 
-<body>
-    <nav class="nav">
-        <div class="nav-container">
-            <a href="index.html" class="nav-logo" style="text-decoration: none;">
-                <i class="ri-flashlight-line" style="color: var(--accent-green)"></i> EasySHM <span class="badge-v">Wiki</span>
+<body
+    class="bg-background text-on-surface font-body-base antialiased flex h-screen overflow-hidden selection:bg-primary-container selection:text-on-primary-container">
+
+    <!-- Mobile Overlay -->
+    <div id="mobile-overlay" class="fixed inset-0 bg-black/50 z-30 hidden transition-opacity duration-300 opacity-0"></div>
+
+    <!-- SideNavBar -->
+    <aside id="sidebar"
+        class="h-screen w-64 fixed left-0 top-0 flex flex-col bg-surface-bright border-r border-outline-variant z-40 transition-transform duration-300 -translate-x-full md:translate-x-0">
+        <div class="p-6 border-b border-outline-variant relative">
+            <button id="close-menu-btn" class="md:hidden absolute top-4 right-4 text-outline hover:text-primary">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            <a href="index.html" class="flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined fill-icon text-primary">memory</span>
+                <h2 class="font-headline-md text-headline-md text-primary">EASYSHM</h2>
             </a>
-            <ul class="nav-links">
-                <li><a href="index.html" data-en="Home" data-fr="Accueil">Home</a></li>
-                <li><a href="https://github.com/GalTechDev/easyshm" target="_blank"><i class="ri-github-fill"></i> GitHub</a></li>
-                <li>
-                    <button onclick="toggleLang()" id="lang-btn" class="lang-toggle">FR</button>
-                </li>
-            </ul>
+            <div class="flex justify-center mt-3">
+                <span class="inline-block px-2 py-0.5 bg-[#eafdf0] text-[#006e0b] border border-[#a1e8af] font-label-caps text-[10px] uppercase">v0.1.0 · MIT</span>
+            </div>
         </div>
-    </nav>
 
-    <div class="container wiki-layout">
-        <aside class="wiki-sidebar">
-            <div class="wiki-sidebar-title" data-en="API Core" data-fr="Cœur de l'API">API Core</div>
-            <ul>
-                <li><a href="#easyshm-class" class="wiki-sidebar-link active" data-en="EasySHM Class" data-fr="Classe EasySHM">EasySHM Class</a></li>
-                <li><a href="#numpy" class="wiki-sidebar-link" data-en="NumPy Integration" data-fr="Intégration NumPy">NumPy Integration</a></li>
-                <li><a href="#signaling" class="wiki-sidebar-link" data-en="Process Signaling" data-fr="Signalisation">Process Signaling</a></li>
-            </ul>
+        <nav class="flex-1 py-4 flex flex-col overflow-y-auto">
+            <a href="index.html"
+                class="flex items-center gap-4 px-6 py-4 text-on-surface-variant hover:bg-surface-container transition-all">
+                <span class="material-symbols-outlined">home</span>
+                <span class="font-label-caps text-label-caps uppercase" data-en="HOME" data-fr="ACCUEIL">ACCUEIL</span>
+            </a>
+            <a href="wiki.html"
+                class="flex items-center gap-4 px-6 py-4 transition-all bg-primary-container text-on-primary-container border-r-4 border-primary">
+                <span class="material-symbols-outlined fill-icon">menu_book</span>
+                <span class="font-label-caps text-label-caps uppercase">DOCUMENTATION</span>
+            </a>
 
-            <div class="wiki-sidebar-title" data-en="Platform" data-fr="Plateforme">Platform</div>
-            <ul>
-                <li><a href="#windows" class="wiki-sidebar-link" data-en="Windows Details" data-fr="Détails Windows">Windows Details</a></li>
-                <li><a href="#linux" class="wiki-sidebar-link" data-en="Linux Details" data-fr="Détails Linux">Linux Details</a></li>
-            </ul>
-        </aside>
+            <!-- Table of contents -->
+            <div class="px-6 pt-6 pb-2 font-label-caps text-[10px] text-outline uppercase" data-en="Getting started" data-fr="Démarrage">Démarrage</div>
+            <a href="#installation" class="toc-link block ml-6 mr-4 pl-4 py-2 border-l-2 border-outline-variant font-code-snippet text-[12px] text-on-surface-variant hover:text-primary transition-colors">Installation</a>
+            <a href="#easyshm-class" class="toc-link block ml-6 mr-4 pl-4 py-2 border-l-2 border-outline-variant font-code-snippet text-[12px] text-on-surface-variant hover:text-primary transition-colors" data-en="EasySHM class" data-fr="Classe EasySHM">Classe EasySHM</a>
 
-        <main class="wiki-content">
-            <section id="easyshm-class" class="wiki-section">
-                <h2 data-en="The EasySHM Class" data-fr="La Classe EasySHM">The EasySHM Class</h2>
-                <p data-en="The main entry point for creating or joining a shared memory segment." data-fr="Le point d'entrée principal pour créer ou joindre un segment de mémoire partagée.">The main entry point for EasySHM.</p>
-                
-                <div class="terminal">
-                    <div class="terminal-body">
-                        <span class="kw">from</span> easyshm <span class="kw">import</span> EasySHM<br><br>
-                        <span class="comment"># Create segment (1MB)</span><br>
-                        shm = <span class="func">EasySHM</span>(<span class="str">"shared_bus"</span>, size=<span class="num">1024*1024</span>)<br><br>
-                        <span class="comment"># Write raw bytes</span><br>
-                        shm.<span class="func">write</span>(<span class="str">b"Hello RAM!"</span>, offset=<span class="num">0</span>)<br><br>
-                        <span class="comment"># Read raw bytes</span><br>
-                        data = shm.<span class="func">read</span>(size=<span class="num">10</span>, offset=<span class="num">0</span>)
+            <div class="px-6 pt-6 pb-2 font-label-caps text-[10px] text-outline uppercase" data-en="API core" data-fr="Cœur de l'API">Cœur de l'API</div>
+            <a href="#read-write" class="toc-link block ml-6 mr-4 pl-4 py-2 border-l-2 border-outline-variant font-code-snippet text-[12px] text-on-surface-variant hover:text-primary transition-colors" data-en="Read &amp; write" data-fr="Lecture &amp; écriture">Lecture &amp; écriture</a>
+            <a href="#views" class="toc-link block ml-6 mr-4 pl-4 py-2 border-l-2 border-outline-variant font-code-snippet text-[12px] text-on-surface-variant hover:text-primary transition-colors" data-en="Zero-copy views" data-fr="Vues zéro-copie">Vues zéro-copie</a>
+            <a href="#signaling" class="toc-link block ml-6 mr-4 pl-4 py-2 border-l-2 border-outline-variant font-code-snippet text-[12px] text-on-surface-variant hover:text-primary transition-colors" data-en="Signaling" data-fr="Signalisation">Signalisation</a>
+            <a href="#lifecycle" class="toc-link block ml-6 mr-4 pl-4 py-2 border-l-2 border-outline-variant font-code-snippet text-[12px] text-on-surface-variant hover:text-primary transition-colors" data-en="Metadata &amp; lifecycle" data-fr="Métadonnées &amp; cycle de vie">Métadonnées &amp; cycle de vie</a>
+            <a href="#errors" class="toc-link block ml-6 mr-4 pl-4 py-2 border-l-2 border-outline-variant font-code-snippet text-[12px] text-on-surface-variant hover:text-primary transition-colors" data-en="Errors" data-fr="Erreurs">Erreurs</a>
+
+            <div class="px-6 pt-6 pb-2 font-label-caps text-[10px] text-outline uppercase" data-en="Platform" data-fr="Plateforme">Plateforme</div>
+            <a href="#windows" class="toc-link block ml-6 mr-4 pl-4 py-2 border-l-2 border-outline-variant font-code-snippet text-[12px] text-on-surface-variant hover:text-primary transition-colors">Windows</a>
+            <a href="#linux" class="toc-link block ml-6 mr-4 pl-4 py-2 border-l-2 border-outline-variant font-code-snippet text-[12px] text-on-surface-variant hover:text-primary transition-colors">Linux / macOS</a>
+            <a href="#internals" class="toc-link block ml-6 mr-4 mb-4 pl-4 py-2 border-l-2 border-outline-variant font-code-snippet text-[12px] text-on-surface-variant hover:text-primary transition-colors" data-en="Internals" data-fr="Fonctionnement interne">Fonctionnement interne</a>
+        </nav>
+
+        <a href="https://github.com/GalTechDev/easyshm" target="_blank" rel="noopener noreferrer"
+            class="p-6 border-t border-outline-variant flex items-center gap-3 text-on-surface-variant hover:text-primary transition-colors">
+            <span class="material-symbols-outlined">code</span>
+            <span class="font-label-caps text-[11px] uppercase">GalTechDev/easyshm</span>
+        </a>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div id="main-scroll" class="flex-1 flex flex-col min-w-0 md:ml-64 h-screen overflow-y-scroll relative data-grid-pattern scroll-smooth">
+
+        <!-- TopAppBar -->
+        <header
+            class="w-full top-0 sticky shrink-0 bg-surface/90 backdrop-blur-sm border-b border-outline-variant flex justify-between items-center h-16 px-gutter z-30">
+            <div class="flex items-center gap-4 min-w-0">
+                <button id="open-menu-btn"
+                    class="md:hidden text-primary p-2 -ml-2 rounded hover:bg-surface-container-low transition-colors">
+                    <span class="material-symbols-outlined">menu</span>
+                </button>
+                <h1 id="topbar-title"
+                    class="font-display-lg text-[20px] md:text-display-lg-mobile text-primary tracking-tighter uppercase truncate">DOCUMENTATION</h1>
+            </div>
+            <button id="lang-btn"
+                class="flex items-center gap-2 px-4 py-2 bg-surface-container-low hover:bg-surface-container border border-outline-variant rounded-full text-primary shadow-sm transition-all hover:shadow-md shrink-0"
+                title="Langue / Language">
+                <span class="font-label-caps text-label-caps">EN</span>
+                <span class="material-symbols-outlined text-[20px]">translate</span>
+            </button>
+        </header>
+
+        <main class="flex-1 flex flex-col fade-in">
+            <div class="w-full p-margin-mobile md:p-gutter">
+                <article class="prose-doc max-w-4xl mx-auto w-full font-body-base text-[16px] text-on-surface leading-relaxed pb-12">
+
+                    <!-- Page header -->
+                    <div class="mb-12 border-b border-outline-variant pb-4 pt-4">
+                        <div class="flex items-center gap-4 mb-4">
+                            <span class="font-code-snippet text-[12px] text-secondary border border-secondary px-3 py-1" data-en="REFERENCE" data-fr="RÉFÉRENCE">RÉFÉRENCE</span>
+                            <span class="font-label-caps text-[12px] text-on-surface-variant">py-easyshm 0.1.0 · Python ≥ 3.8</span>
+                        </div>
+                        <h2 class="font-display-lg text-[32px] md:text-[48px] text-on-background uppercase tracking-tight leading-tight mb-4">
+                            Documentation</h2>
+                        <p class="text-[18px] md:text-[20px] font-medium text-primary"
+                            data-en="Everything you need to share memory between Python processes: creating segments, typed views, signaling and platform details."
+                            data-fr="Tout ce qu'il faut pour partager de la mémoire entre processus Python : création de segments, vues typées, signalisation et détails de plateforme.">
+                            Tout ce qu'il faut pour partager de la mémoire entre processus Python : création de segments, vues typées, signalisation et détails de plateforme.</p>
                     </div>
-                </div>
-            </section>
 
-            <section id="numpy" class="wiki-section">
-                <h2 data-en="NumPy Integration" data-fr="Intégration NumPy">NumPy Integration</h2>
-                <p data-en="EasySHM supports zero-copy views for NumPy arrays. Any change made to the array is immediately visible to other processes."
-                   data-fr="EasySHM supporte les vues 'zéro-copie' pour les tableaux NumPy. Tout changement dans le tableau est immédiatement visible par les autres processus.">
-                    EasySHM supports zero-copy views for NumPy arrays.
+                    <!-- ============================================== -->
+                    <!-- INSTALLATION                                   -->
+                    <!-- ============================================== -->
+                    <section id="installation" class="scroll-mt-24 mb-16 space-y-6">
+                        <div class="font-label-caps text-[12px] text-primary">01</div>
+                        <h2 class="font-headline-md text-[24px] text-on-background uppercase border-b border-outline-variant pb-2">Installation</h2>
+                        <div class="flex items-stretch border border-outline-variant bg-surface-container-lowest shadow-sm max-w-md">
+                            <span class="flex items-center px-4 border-r border-outline-variant text-primary font-code-snippet">$</span>
+                            <code class="flex-1 flex items-center px-4 py-3 font-code-snippet text-[14px] text-on-surface">pip install py-easyshm</code>
+                            <button data-copy="pip install py-easyshm"
+                                class="px-4 border-l border-outline-variant text-outline hover:text-primary hover:bg-surface-container-low transition-colors" title="Copier">
+                                <span class="material-symbols-outlined text-[20px]">content_copy</span>
+                            </button>
+                        </div>
+                        <p data-en="NumPy is installed as a dependency. PyTorch is optional and only needed for the <code>torch</code> view."
+                            data-fr="NumPy est installé comme dépendance. PyTorch est optionnel et n'est requis que pour la vue <code>torch</code>.">
+                            NumPy est installé comme dépendance. PyTorch est optionnel et n'est requis que pour la vue <code>torch</code>.</p>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- EASYSHM CLASS                                  -->
+                    <!-- ============================================== -->
+                    <section id="easyshm-class" class="scroll-mt-24 mb-16 space-y-6">
+                        <div class="font-label-caps text-[12px] text-primary">02</div>
+                        <h2 class="font-headline-md text-[24px] text-on-background uppercase border-b border-outline-variant pb-2" data-en="The EasySHM class" data-fr="La classe EasySHM">La classe EasySHM</h2>
+                        <p data-en="The single entry point. Every process that opens the same <code>name</code> shares the same memory: the first one creates the segment, the next ones join it (and <code>size</code> is then ignored)."
+                            data-fr="L'unique point d'entrée. Tous les processus qui ouvrent le même <code>name</code> partagent la même mémoire : le premier crée le segment, les suivants le rejoignent (<code>size</code> est alors ignoré).">
+                            L'unique point d'entrée. Tous les processus qui ouvrent le même <code>name</code> partagent la même mémoire : le premier crée le segment, les suivants le rejoignent (<code>size</code> est alors ignoré).</p>
+
+                        <div class="bg-surface-container-lowest border-l-4 border-primary p-6 shadow-sm">
+                            <h4 class="font-code-snippet text-[14px] text-primary uppercase mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px]">code</span>signature
+                            </h4>
+                            <div class="bg-surface-container p-4 overflow-x-auto">
+<pre class="code-block"><span class="fn">EasySHM</span>(
+    name: str,
+    size: int = <span class="num">4096</span>,
+    auto_grow: bool = <span class="kw">True</span>,
+    auto_shrink: bool = <span class="kw">False</span>,
+    mode: int = <span class="num">0o600</span>,
+    auto_recover_mutex: bool = <span class="kw">True</span>,
+    pinned: bool = <span class="kw">False</span>,
+    on_pin_fail: str = <span class="str">"error"</span>,
+    persistent: bool = <span class="kw">False</span>,
+)</pre>
+                            </div>
+                        </div>
+
+                        <div class="border border-outline-variant bg-surface-container-lowest shadow-sm overflow-x-auto">
+                            <table class="w-full text-left text-[14px]">
+                                <thead class="bg-surface border-b border-outline-variant">
+                                    <tr class="font-label-caps text-[11px] text-outline uppercase">
+                                        <th class="p-4" data-en="Parameter" data-fr="Paramètre">Paramètre</th>
+                                        <th class="p-4">Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-on-surface-variant">
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">name</td>
+                                        <td class="p-4" data-en="Unique identifier shared by all processes." data-fr="Identifiant unique partagé par tous les processus.">Identifiant unique partagé par tous les processus.</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">size</td>
+                                        <td class="p-4" data-en="Initial capacity in bytes. Ignored if the segment already exists." data-fr="Capacité initiale en octets. Ignorée si le segment existe déjà.">Capacité initiale en octets. Ignorée si le segment existe déjà.</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">auto_grow</td>
+                                        <td class="p-4" data-en="<code>write()</code> doubles the capacity when data does not fit. If <code>False</code>, raises <code>OverflowError</code>." data-fr="<code>write()</code> double la capacité quand les données ne tiennent pas. Si <code>False</code>, lève <code>OverflowError</code>."><code>write()</code> double la capacité quand les données ne tiennent pas. Si <code>False</code>, lève <code>OverflowError</code>.</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">auto_shrink</td>
+                                        <td class="p-4" data-en="Halves the capacity when data uses less than 25 % of it (never below the initial size)." data-fr="Divise la capacité par deux quand les données en utilisent moins de 25 % (jamais sous la taille initiale).">Divise la capacité par deux quand les données en utilisent moins de 25 % (jamais sous la taille initiale).</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">mode</td>
+                                        <td class="p-4" data-en="POSIX file permissions of the segment (owner only by default)." data-fr="Permissions POSIX du fichier de segment (propriétaire uniquement par défaut).">Permissions POSIX du fichier de segment (propriétaire uniquement par défaut).</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">auto_recover_mutex</td>
+                                        <td class="p-4" data-en="Silently take over a mutex abandoned by a crashed process. If <code>False</code>, raises <code>LockAbandonedError</code>." data-fr="Reprend silencieusement un mutex abandonné par un processus planté. Si <code>False</code>, lève <code>LockAbandonedError</code>.">Reprend silencieusement un mutex abandonné par un processus planté. Si <code>False</code>, lève <code>LockAbandonedError</code>.</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">pinned</td>
+                                        <td class="p-4" data-en="Lock the segment in physical RAM (<code>mlock</code> / <code>VirtualLock</code>) so it is never swapped out." data-fr="Verrouille le segment en RAM physique (<code>mlock</code> / <code>VirtualLock</code>) pour qu'il ne soit jamais swappé.">Verrouille le segment en RAM physique (<code>mlock</code> / <code>VirtualLock</code>) pour qu'il ne soit jamais swappé.</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">on_pin_fail</td>
+                                        <td class="p-4" data-en="<code>&quot;error&quot;</code> raises if pinning fails; any other value only prints a warning." data-fr="<code>&quot;error&quot;</code> lève une exception si le verrouillage échoue ; toute autre valeur affiche seulement un avertissement."><code>"error"</code> lève une exception si le verrouillage échoue ; toute autre valeur affiche seulement un avertissement.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">persistent</td>
+                                        <td class="p-4" data-en="If <code>False</code>, the last process to <code>close()</code> deletes the segment. If <code>True</code>, it survives until <code>destroy()</code> (POSIX only: Windows always frees it with the last handle)." data-fr="Si <code>False</code>, le dernier processus à appeler <code>close()</code> supprime le segment. Si <code>True</code>, il survit jusqu'à <code>destroy()</code> (POSIX uniquement : Windows le libère toujours avec le dernier handle).">Si <code>False</code>, le dernier processus à appeler <code>close()</code> supprime le segment. Si <code>True</code>, il survit jusqu'à <code>destroy()</code> (POSIX uniquement : Windows le libère toujours avec le dernier handle).</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- READ / WRITE                                   -->
+                    <!-- ============================================== -->
+                    <section id="read-write" class="scroll-mt-24 mb-16 space-y-6">
+                        <div class="font-label-caps text-[12px] text-primary">03</div>
+                        <h2 class="font-headline-md text-[24px] text-on-background uppercase border-b border-outline-variant pb-2" data-en="Read &amp; write" data-fr="Lecture &amp; écriture">Lecture &amp; écriture</h2>
+                        <p data-en="Raw byte access. Every call is protected by the inter-process mutex, and every <code>write()</code> increments the sequence counter and wakes up the other processes."
+                            data-fr="Accès brut aux octets. Chaque appel est protégé par le mutex inter-processus, et chaque <code>write()</code> incrémente le compteur de séquence et réveille les autres processus.">
+                            Accès brut aux octets. Chaque appel est protégé par le mutex inter-processus, et chaque <code>write()</code> incrémente le compteur de séquence et réveille les autres processus.</p>
+
+                        <div class="bg-surface-container-lowest border-l-4 border-secondary p-6 shadow-sm">
+                            <h4 class="font-code-snippet text-[14px] text-secondary uppercase mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px]">code</span>example.py
+                            </h4>
+                            <div class="bg-surface-container p-4 overflow-x-auto">
+<pre class="code-block"><span class="kw">from</span> easyshm <span class="kw">import</span> EasySHM
+
+shm = <span class="fn">EasySHM</span>(<span class="str">"shared_bus"</span>, size=<span class="num">1024</span> * <span class="num">1024</span>)
+
+<span class="cm"># Écrire des octets (truncate=True remplace data_size)</span>
+shm.<span class="fn">write</span>(<span class="str">b"Hello RAM!"</span>, offset=<span class="num">0</span>, truncate=<span class="kw">True</span>)
+
+<span class="cm"># Lire : size=None lit jusqu'à data_size</span>
+data = shm.<span class="fn">read</span>()               <span class="cm"># b"Hello RAM!"</span>
+part = shm.<span class="fn">read</span>(size=<span class="num">5</span>, offset=<span class="num">0</span>)  <span class="cm"># b"Hello"</span>
+
+<span class="cm"># Vue memoryview sans copie</span>
+mv = shm.<span class="fn">read_view</span>()
+
+<span class="cm"># Redimensionnement manuel</span>
+shm.<span class="fn">resize</span>(<span class="num">4</span> * <span class="num">1024</span> * <span class="num">1024</span>)</pre>
+                            </div>
+                        </div>
+
+                        <div class="border border-outline-variant bg-surface-container-lowest shadow-sm overflow-x-auto">
+                            <table class="w-full text-left text-[14px]">
+                                <tbody class="text-on-surface-variant">
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">write(data, offset=0, truncate=False)</td>
+                                        <td class="p-4" data-en="Writes <code>bytes</code>, <code>bytearray</code> or <code>memoryview</code>. Grows the segment if needed." data-fr="Écrit des <code>bytes</code>, <code>bytearray</code> ou <code>memoryview</code>. Agrandit le segment si besoin.">Écrit des <code>bytes</code>, <code>bytearray</code> ou <code>memoryview</code>. Agrandit le segment si besoin.</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">read(size=None, offset=0)</td>
+                                        <td class="p-4" data-en="Returns a copy as <code>bytes</code>." data-fr="Renvoie une copie en <code>bytes</code>.">Renvoie une copie en <code>bytes</code>.</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">read_view(offset=0, size=None)</td>
+                                        <td class="p-4" data-en="Returns a zero-copy <code>memoryview</code> on the buffer." data-fr="Renvoie une <code>memoryview</code> zéro-copie sur le buffer.">Renvoie une <code>memoryview</code> zéro-copie sur le buffer.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-4 font-code-snippet text-primary whitespace-nowrap">resize(new_capacity)</td>
+                                        <td class="p-4" data-en="Grows or shrinks the segment; other processes follow automatically." data-fr="Agrandit ou réduit le segment ; les autres processus suivent automatiquement.">Agrandit ou réduit le segment ; les autres processus suivent automatiquement.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- VIEWS                                          -->
+                    <!-- ============================================== -->
+                    <section id="views" class="scroll-mt-24 mb-16 space-y-6">
+                        <div class="font-label-caps text-[12px] text-primary">04</div>
+                        <h2 class="font-headline-md text-[24px] text-on-background uppercase border-b border-outline-variant pb-2" data-en="Zero-copy views" data-fr="Vues zéro-copie">Vues zéro-copie</h2>
+                        <p data-en="<code>as_view(name, **kwargs)</code> maps a typed Python object directly onto the shared buffer. Nothing is copied: modifying the object modifies the memory seen by every process."
+                            data-fr="<code>as_view(name, **kwargs)</code> mappe un objet Python typé directement sur le buffer partagé. Rien n'est copié : modifier l'objet modifie la mémoire vue par tous les processus.">
+                            <code>as_view(name, **kwargs)</code> mappe un objet Python typé directement sur le buffer partagé. Rien n'est copié : modifier l'objet modifie la mémoire vue par tous les processus.</p>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-base">
+                            <div class="bg-surface border border-outline-variant shadow-sm">
+                                <div class="p-4 border-b border-outline-variant bg-surface-bright font-headline-md text-[16px] text-primary uppercase">numpy</div>
+                                <div class="p-4 font-code-snippet text-[12px] text-on-surface-variant">shape, dtype="uint8", offset=0</div>
+                            </div>
+                            <div class="bg-surface border border-outline-variant shadow-sm">
+                                <div class="p-4 border-b border-outline-variant bg-surface-bright font-headline-md text-[16px] text-primary uppercase">struct</div>
+                                <div class="p-4 font-code-snippet text-[12px] text-on-surface-variant">type=ctypes.Structure, offset=0</div>
+                            </div>
+                            <div class="bg-surface border border-outline-variant shadow-sm">
+                                <div class="p-4 border-b border-outline-variant bg-surface-bright font-headline-md text-[16px] text-primary uppercase">torch</div>
+                                <div class="p-4 font-code-snippet text-[12px] text-on-surface-variant">shape, dtype="float32", offset=0</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-surface-container-lowest border-l-4 border-secondary p-6 shadow-sm">
+                            <h4 class="font-code-snippet text-[14px] text-secondary uppercase mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px]">code</span>views.py
+                            </h4>
+                            <div class="bg-surface-container p-4 overflow-x-auto">
+<pre class="code-block"><span class="kw">import</span> ctypes
+
+<span class="cm"># NumPy : une image 1080p partagée</span>
+img = shm.<span class="fn">as_view</span>(<span class="str">"numpy"</span>, shape=(<span class="num">1080</span>, <span class="num">1920</span>, <span class="num">3</span>), dtype=<span class="str">"uint8"</span>)
+img[:] = <span class="num">255</span>  <span class="cm"># écran blanc pour tous les processus</span>
+
+<span class="cm"># Structure C</span>
+<span class="kw">class</span> <span class="fn">Player</span>(ctypes.Structure):
+    _fields_ = [(<span class="str">"x"</span>, ctypes.c_int), (<span class="str">"y"</span>, ctypes.c_int)]
+
+p = shm.<span class="fn">as_view</span>(<span class="str">"struct"</span>, type=Player)
+p.x = <span class="num">100</span>
+
+<span class="cm"># Tenseur PyTorch (CPU)</span>
+t = shm.<span class="fn">as_view</span>(<span class="str">"torch"</span>, shape=(<span class="num">10</span>,))</pre>
+                            </div>
+                        </div>
+
+                        <h3 class="font-headline-md text-[18px] text-on-background uppercase pt-4" data-en="Custom views" data-fr="Vues personnalisées">Vues personnalisées</h3>
+                        <p data-en="The registry is extensible: subclass <code>SHMView</code>, implement <code>map_buffer()</code> and register it under a new name."
+                            data-fr="Le registre est extensible : héritez de <code>SHMView</code>, implémentez <code>map_buffer()</code> et enregistrez-la sous un nouveau nom.">
+                            Le registre est extensible : héritez de <code>SHMView</code>, implémentez <code>map_buffer()</code> et enregistrez-la sous un nouveau nom.</p>
+                        <div class="bg-surface-container-lowest border-l-4 border-secondary p-6 shadow-sm">
+                            <div class="bg-surface-container p-4 overflow-x-auto">
+<pre class="code-block"><span class="kw">from</span> easyshm.views <span class="kw">import</span> ViewRegistry, SHMView
+
+<span class="kw">class</span> <span class="fn">BytesView</span>(SHMView):
+    <span class="kw">def</span> <span class="fn">map_buffer</span>(self, buffer, **kwargs):
+        offset = kwargs.<span class="fn">get</span>(<span class="str">"offset"</span>, <span class="num">0</span>)
+        <span class="kw">return</span> buffer[offset:offset + kwargs[<span class="str">"size"</span>]]
+
+ViewRegistry.<span class="fn">register</span>(<span class="str">"bytes"</span>, <span class="fn">BytesView</span>())
+raw = shm.<span class="fn">as_view</span>(<span class="str">"bytes"</span>, size=<span class="num">16</span>)</pre>
+                            </div>
+                        </div>
+
+                        <div class="flex items-start gap-3 p-4 bg-surface-container-lowest border border-outline-variant border-l-4 border-l-[#f59e0b] shadow-sm text-[15px] text-on-surface-variant">
+                            <span class="material-symbols-outlined text-[#b45309]">warning</span>
+                            <span data-en="A view points to the current data segment. After a resize (by any process), request the view again, for example from an <code>on_resize()</code> callback. <code>as_ndarray()</code> is deprecated: use <code>as_view(&quot;numpy&quot;, ...)</code>."
+                                data-fr="Une vue pointe sur le segment de données courant. Après un redimensionnement (par n'importe quel processus), redemandez la vue, par exemple depuis un callback <code>on_resize()</code>. <code>as_ndarray()</code> est obsolète : utilisez <code>as_view(&quot;numpy&quot;, ...)</code>.">
+                                Une vue pointe sur le segment de données courant. Après un redimensionnement (par n'importe quel processus), redemandez la vue, par exemple depuis un callback <code>on_resize()</code>. <code>as_ndarray()</code> est obsolète : utilisez <code>as_view("numpy", ...)</code>.</span>
+                        </div>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- SIGNALING                                      -->
+                    <!-- ============================================== -->
+                    <section id="signaling" class="scroll-mt-24 mb-16 space-y-6">
+                        <div class="font-label-caps text-[12px] text-primary">05</div>
+                        <h2 class="font-headline-md text-[24px] text-on-background uppercase border-b border-outline-variant pb-2" data-en="Process signaling" data-fr="Signalisation inter-processus">Signalisation inter-processus</h2>
+                        <p data-en="Instead of polling memory, block on a kernel object until another process writes. Two styles are available: blocking wait or background callbacks."
+                            data-fr="Au lieu de scruter la mémoire en boucle, bloquez sur un objet noyau jusqu'à ce qu'un autre processus écrive. Deux styles sont disponibles : attente bloquante ou callbacks en arrière-plan.">
+                            Au lieu de scruter la mémoire en boucle, bloquez sur un objet noyau jusqu'à ce qu'un autre processus écrive. Deux styles sont disponibles : attente bloquante ou callbacks en arrière-plan.</p>
+
+                        <div class="bg-surface-container-lowest border-l-4 border-secondary p-6 shadow-sm">
+                            <h4 class="font-code-snippet text-[14px] text-secondary uppercase mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px]">code</span>listener.py
+                            </h4>
+                            <div class="bg-surface-container p-4 overflow-x-auto">
+<pre class="code-block"><span class="cm"># Style 1 : attente bloquante (timeout en secondes, None = infini)</span>
+<span class="kw">if</span> shm.<span class="fn">wait_update</span>(timeout=<span class="num">5.0</span>):
+    <span class="fn">print</span>(<span class="str">"Données mises à jour :"</span>, shm.<span class="fn">read</span>())
+
+<span class="cm"># Style 2 : callbacks exécutés par le thread d'écoute</span>
+shm.<span class="fn">on_update</span>(<span class="kw">lambda</span>: <span class="fn">print</span>(<span class="str">"write_seq ="</span>, shm.write_seq))
+shm.<span class="fn">on_resize</span>(<span class="kw">lambda</span> cap: <span class="fn">print</span>(<span class="str">"nouvelle capacité :"</span>, cap))</pre>
+                            </div>
+                        </div>
+
+                        <ul class="text-[15px] text-on-surface-variant space-y-3 list-none">
+                            <li class="flex items-start gap-2"><span class="material-symbols-outlined text-[16px] text-primary mt-1">play_arrow</span>
+                                <span data-en="<code>wait_update()</code> returns <code>True</code> if another process wrote since the last update it reported (writes between two calls are never missed, several writes may be reported at once), <code>False</code> on timeout. An instance is not woken by its own writes."
+                                    data-fr="<code>wait_update()</code> renvoie <code>True</code> si un autre processus a écrit depuis la dernière mise à jour signalée (une écriture entre deux appels n'est jamais perdue, plusieurs écritures peuvent être signalées d'un coup), <code>False</code> en cas de timeout. Une instance n'est pas réveillée par ses propres écritures."><code>wait_update()</code> renvoie <code>True</code> si un autre processus a écrit depuis la dernière mise à jour signalée (une écriture entre deux appels n'est jamais perdue, plusieurs écritures peuvent être signalées d'un coup), <code>False</code> en cas de timeout. Une instance n'est pas réveillée par ses propres écritures.</span></li>
+                            <li class="flex items-start gap-2"><span class="material-symbols-outlined text-[16px] text-primary mt-1">play_arrow</span>
+                                <span data-en="<code>on_update(cb)</code> callbacks take no argument; <code>on_resize(cb)</code> callbacks receive the new capacity. They run in a listener thread started with the first callback: without callbacks, no thread slows down your writes."
+                                    data-fr="Les callbacks <code>on_update(cb)</code> ne prennent aucun argument ; ceux de <code>on_resize(cb)</code> reçoivent la nouvelle capacité. Ils tournent dans un thread d'écoute démarré avec le premier callback : sans callback, aucun thread ne ralentit vos écritures.">Les callbacks <code>on_update(cb)</code> ne prennent aucun argument ; ceux de <code>on_resize(cb)</code> reçoivent la nouvelle capacité. Ils tournent dans un thread d'écoute démarré avec le premier callback : sans callback, aucun thread ne ralentit vos écritures.</span></li>
+                            <li class="flex items-start gap-2"><span class="material-symbols-outlined text-[16px] text-primary mt-1">play_arrow</span>
+                                <span data-en="Exceptions raised inside callbacks are swallowed so they never kill the listener thread."
+                                    data-fr="Les exceptions levées dans les callbacks sont ignorées pour ne jamais tuer le thread d'écoute.">Les exceptions levées dans les callbacks sont ignorées pour ne jamais tuer le thread d'écoute.</span></li>
+                        </ul>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- LIFECYCLE                                      -->
+                    <!-- ============================================== -->
+                    <section id="lifecycle" class="scroll-mt-24 mb-16 space-y-6">
+                        <div class="font-label-caps text-[12px] text-primary">06</div>
+                        <h2 class="font-headline-md text-[24px] text-on-background uppercase border-b border-outline-variant pb-2" data-en="Metadata &amp; lifecycle" data-fr="Métadonnées &amp; cycle de vie">Métadonnées &amp; cycle de vie</h2>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 border border-outline-variant bg-surface-container-lowest shadow-sm">
+                            <div class="p-5 border-b md:border-b-0 md:border-r border-outline-variant">
+                                <div class="font-code-snippet text-[14px] text-primary font-bold">.data_size</div>
+                                <div class="text-[14px] text-on-surface-variant mt-2" data-en="Bytes of user data actually written." data-fr="Octets de données effectivement écrits.">Octets de données effectivement écrits.</div>
+                            </div>
+                            <div class="p-5 border-b md:border-b-0 md:border-r border-outline-variant">
+                                <div class="font-code-snippet text-[14px] text-primary font-bold">.capacity</div>
+                                <div class="text-[14px] text-on-surface-variant mt-2" data-en="Currently allocated size in bytes." data-fr="Taille actuellement allouée en octets.">Taille actuellement allouée en octets.</div>
+                            </div>
+                            <div class="p-5">
+                                <div class="font-code-snippet text-[14px] text-primary font-bold">.write_seq</div>
+                                <div class="text-[14px] text-on-surface-variant mt-2" data-en="Monotonic counter, incremented on every write." data-fr="Compteur monotone, incrémenté à chaque écriture.">Compteur monotone, incrémenté à chaque écriture.</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-surface-container-lowest border-l-4 border-secondary p-6 shadow-sm">
+                            <div class="bg-surface-container p-4 overflow-x-auto">
+<pre class="code-block">shm.<span class="fn">close</span>()    <span class="cm"># libère ce processus ; le dernier utilisateur supprime le segment</span>
+shm.<span class="fn">destroy</span>()  <span class="cm"># supprime tout immédiatement, même s'il reste des utilisateurs</span>
+
+<span class="kw">with</span> <span class="fn">EasySHM</span>(<span class="str">"bus"</span>) <span class="kw">as</span> shm:  <span class="cm"># close() automatique</span>
+    shm.<span class="fn">write</span>(<span class="str">b"ping"</span>)</pre>
+                            </div>
+                        </div>
+                        <p data-en="Each process holding the segment keeps a shared lock on it, released by the kernel even if the process crashes. On <code>close()</code>, if no other process holds it any more, every OS object is deleted (data, control segment, lock file, semaphore on macOS). Other users keep working normally. Pass <code>persistent=True</code> to keep the data after the last close."
+                            data-fr="Chaque processus qui tient le segment garde un verrou partagé dessus, libéré par le noyau même si le processus plante. Au <code>close()</code>, si plus aucun autre processus ne le tient, tous les objets OS sont supprimés (données, segment de contrôle, fichier de verrou, sémaphore sous macOS). Les autres utilisateurs continuent normalement. Passez <code>persistent=True</code> pour conserver les données après la dernière fermeture.">
+                            Chaque processus qui tient le segment garde un verrou partagé dessus, libéré par le noyau même si le processus plante. Au <code>close()</code>, si plus aucun autre processus ne le tient, tous les objets OS sont supprimés (données, segment de contrôle, fichier de verrou, sémaphore sous macOS). Les autres utilisateurs continuent normalement. Passez <code>persistent=True</code> pour conserver les données après la dernière fermeture.</p>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- ERRORS                                         -->
+                    <!-- ============================================== -->
+                    <section id="errors" class="scroll-mt-24 mb-16 space-y-6">
+                        <div class="font-label-caps text-[12px] text-primary">07</div>
+                        <h2 class="font-headline-md text-[24px] text-on-background uppercase border-b border-outline-variant pb-2" data-en="Errors" data-fr="Erreurs">Erreurs</h2>
+                        <div class="border border-outline-variant bg-surface-container-lowest shadow-sm overflow-x-auto">
+                            <table class="w-full text-left text-[14px]">
+                                <tbody class="text-on-surface-variant">
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-error whitespace-nowrap">LockAbandonedError</td>
+                                        <td class="p-4" data-en="The mutex was held by a process that crashed (only when <code>auto_recover_mutex=False</code>). Detected on Windows and on Linux/macOS." data-fr="Le mutex était détenu par un processus qui a planté (uniquement si <code>auto_recover_mutex=False</code>). Détecté sous Windows comme sous Linux/macOS.">Le mutex était détenu par un processus qui a planté (uniquement si <code>auto_recover_mutex=False</code>). Détecté sous Windows comme sous Linux/macOS.</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-error whitespace-nowrap">ProtocolIncompatibilityError</td>
+                                        <td class="p-4" data-en="The existing segment was created by an incompatible EasySHM protocol version. Delete it with <code>EasySHM.unlink(name)</code>." data-fr="Le segment existant a été créé par une version de protocole EasySHM incompatible. Supprimez-le avec <code>EasySHM.unlink(name)</code>.">Le segment existant a été créé par une version de protocole EasySHM incompatible. Supprimez-le avec <code>EasySHM.unlink(name)</code>.</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-error whitespace-nowrap">CorruptedSegmentError</td>
+                                        <td class="p-4" data-en="The segment exists but its control header is corrupted. Nothing is overwritten; delete it with <code>EasySHM.unlink(name)</code>." data-fr="Le segment existe mais son en-tête de contrôle est corrompu. Rien n'est écrasé ; supprimez-le avec <code>EasySHM.unlink(name)</code>.">Le segment existe mais son en-tête de contrôle est corrompu. Rien n'est écrasé ; supprimez-le avec <code>EasySHM.unlink(name)</code>.</td>
+                                    </tr>
+                                    <tr class="border-b border-outline-variant">
+                                        <td class="p-4 font-code-snippet text-error whitespace-nowrap">OverflowError</td>
+                                        <td class="p-4" data-en="Data exceeds capacity while <code>auto_grow=False</code>." data-fr="Les données dépassent la capacité alors que <code>auto_grow=False</code>.">Les données dépassent la capacité alors que <code>auto_grow=False</code>.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-4 font-code-snippet text-error whitespace-nowrap">TimeoutError</td>
+                                        <td class="p-4" data-en="The IPC lock could not be acquired for writing." data-fr="Le verrou IPC n'a pas pu être acquis pour l'écriture.">Le verrou IPC n'a pas pu être acquis pour l'écriture.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="bg-surface-container-lowest border-l-4 border-secondary p-6 shadow-sm">
+                            <div class="bg-surface-container p-4 overflow-x-auto">
+<pre class="code-block"><span class="kw">from</span> easyshm <span class="kw">import</span> EasySHM, CorruptedSegmentError, ProtocolIncompatibilityError
+
+<span class="kw">try</span>:
+    shm = <span class="fn">EasySHM</span>(<span class="str">"bus"</span>)
+<span class="kw">except</span> (CorruptedSegmentError, ProtocolIncompatibilityError):
+    EasySHM.<span class="fn">unlink</span>(<span class="str">"bus"</span>)  <span class="cm"># supprime le segment sans l'ouvrir</span>
+    shm = <span class="fn">EasySHM</span>(<span class="str">"bus"</span>)</pre>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- WINDOWS                                        -->
+                    <!-- ============================================== -->
+                    <section id="windows" class="scroll-mt-24 mb-16 space-y-6">
+                        <div class="font-label-caps text-[12px] text-primary">08</div>
+                        <h2 class="font-headline-md text-[24px] text-on-background uppercase border-b border-outline-variant pb-2" data-en="Windows implementation" data-fr="Implémentation Windows">Implémentation Windows</h2>
+                        <p data-en="Segments are named file mappings. Signaling uses manual-reset Named Events in the session namespace <code>Local\</code>, so no administrator rights are required."
+                            data-fr="Les segments sont des file mappings nommés. La signalisation utilise des Named Events à réinitialisation manuelle dans l'espace de session <code>Local\</code> : aucun droit administrateur n'est nécessaire.">
+                            Les segments sont des file mappings nommés. La signalisation utilise des Named Events à réinitialisation manuelle dans l'espace de session <code>Local\</code> : aucun droit administrateur n'est nécessaire.</p>
+                        <div class="flex items-start gap-3 p-4 bg-surface-container-lowest border border-outline-variant border-l-4 border-l-primary shadow-sm text-[15px] text-on-surface-variant">
+                            <span class="material-symbols-outlined text-primary">bolt</span>
+                            <span data-en="A write calls <code>SetEvent</code> then <code>ResetEvent</code>, waking every waiting process at once. The listener thread also polls every 100 ms as a safety net."
+                                data-fr="Une écriture appelle <code>SetEvent</code> puis <code>ResetEvent</code>, ce qui réveille tous les processus en attente d'un coup. Le thread d'écoute vérifie aussi toutes les 100 ms par sécurité.">
+                                Une écriture appelle <code>SetEvent</code> puis <code>ResetEvent</code>, ce qui réveille tous les processus en attente d'un coup. Le thread d'écoute vérifie aussi toutes les 100 ms par sécurité.</span>
+                        </div>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- LINUX                                          -->
+                    <!-- ============================================== -->
+                    <section id="linux" class="scroll-mt-24 mb-16 space-y-6">
+                        <div class="font-label-caps text-[12px] text-primary">09</div>
+                        <h2 class="font-headline-md text-[24px] text-on-background uppercase border-b border-outline-variant pb-2" data-en="Linux / macOS implementation" data-fr="Implémentation Linux / macOS">Implémentation Linux / macOS</h2>
+                        <p data-en="Segments are memory-mapped files in <code>/dev/shm</code> (RAM-backed tmpfs), falling back to the temp directory when it is unavailable. On Linux, signaling is a <strong>futex</strong> on the <code>write_seq</code> word of the shared header: one write wakes every waiter at once, with no leftover token and no lost wake-up. macOS uses POSIX named semaphores. The mutex relies on <code>flock</code>, and names are prefixed with the user id, isolating users from each other."
+                            data-fr="Les segments sont des fichiers mappés en mémoire dans <code>/dev/shm</code> (tmpfs en RAM), avec repli sur le dossier temporaire s'il n'existe pas. Sous Linux, la signalisation est un <strong>futex</strong> posé sur le mot <code>write_seq</code> de l'en-tête partagé : une écriture réveille tous les processus en attente d'un coup, sans jeton résiduel ni réveil perdu. macOS utilise des sémaphores POSIX nommés. Le mutex repose sur <code>flock</code>, et les noms sont préfixés par l'uid, ce qui isole les utilisateurs entre eux.">
+                            Les segments sont des fichiers mappés en mémoire dans <code>/dev/shm</code> (tmpfs en RAM), avec repli sur le dossier temporaire s'il n'existe pas. Sous Linux, la signalisation est un <strong>futex</strong> posé sur le mot <code>write_seq</code> de l'en-tête partagé : une écriture réveille tous les processus en attente d'un coup, sans jeton résiduel ni réveil perdu. macOS utilise des sémaphores POSIX nommés. Le mutex repose sur <code>flock</code>, et les noms sont préfixés par l'uid, ce qui isole les utilisateurs entre eux.</p>
+                        <div class="flex items-start gap-3 p-4 bg-surface-container-lowest border border-outline-variant border-l-4 border-l-secondary shadow-sm text-[15px] text-on-surface-variant">
+                            <span class="material-symbols-outlined text-secondary">terminal</span>
+                            <span data-en="Tip: inspect live segments with <code>ls -l /dev/shm/easyshm_*</code>."
+                                data-fr="Astuce : inspectez les segments actifs avec <code>ls -l /dev/shm/easyshm_*</code>.">
+                                Astuce : inspectez les segments actifs avec <code>ls -l /dev/shm/easyshm_*</code>.</span>
+                        </div>
+                    </section>
+
+                    <!-- ============================================== -->
+                    <!-- INTERNALS                                      -->
+                    <!-- ============================================== -->
+                    <section id="internals" class="scroll-mt-24 mb-8 space-y-6">
+                        <div class="font-label-caps text-[12px] text-primary">10</div>
+                        <h2 class="font-headline-md text-[24px] text-on-background uppercase border-b border-outline-variant pb-2" data-en="Internals" data-fr="Fonctionnement interne">Fonctionnement interne</h2>
+                        <p data-en="Each EasySHM object is made of a 256-byte <strong>control segment</strong> (<code>_ctrl</code>) and a versioned <strong>data segment</strong> (<code>_d0</code>, <code>_d1</code>…). A resize creates a new data segment, copies the data, then bumps <code>seg_version</code>: the other processes notice it and remap."
+                            data-fr="Chaque objet EasySHM se compose d'un <strong>segment de contrôle</strong> de 256 octets (<code>_ctrl</code>) et d'un <strong>segment de données</strong> versionné (<code>_d0</code>, <code>_d1</code>…). Un redimensionnement crée un nouveau segment, y copie les données, puis incrémente <code>seg_version</code> : les autres processus le détectent et se remappent.">
+                            Chaque objet EasySHM se compose d'un <strong>segment de contrôle</strong> de 256 octets (<code>_ctrl</code>) et d'un <strong>segment de données</strong> versionné (<code>_d0</code>, <code>_d1</code>…). Un redimensionnement crée un nouveau segment, y copie les données, puis incrémente <code>seg_version</code> : les autres processus le détectent et se remappent.</p>
+
+                        <div class="border border-outline-variant bg-surface-container-lowest shadow-sm">
+                            <div class="border-b border-outline-variant p-4 flex justify-between items-center bg-surface">
+                                <span class="font-label-caps text-[12px] text-primary">CTRL_HEADER · LITTLE-ENDIAN</span>
+                                <span class="font-code-snippet text-[10px] text-outline">40 / 256 B</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left font-code-snippet text-[13px]">
+                                    <thead class="border-b border-outline-variant">
+                                        <tr class="font-label-caps text-[11px] text-outline uppercase">
+                                            <th class="p-3">Offset</th>
+                                            <th class="p-3">Size</th>
+                                            <th class="p-3">Type</th>
+                                            <th class="p-3">Field</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-on-surface-variant">
+                                        <tr class="border-b border-outline-variant"><td class="p-3">0</td><td class="p-3">4</td><td class="p-3">bytes</td><td class="p-3 text-primary">magic <span class="text-outline">"ESHM"</span></td></tr>
+                                        <tr class="border-b border-outline-variant"><td class="p-3">4</td><td class="p-3">4</td><td class="p-3">uint32</td><td class="p-3 text-primary">seg_version</td></tr>
+                                        <tr class="border-b border-outline-variant"><td class="p-3">8</td><td class="p-3">8</td><td class="p-3">uint64</td><td class="p-3 text-primary">data_size</td></tr>
+                                        <tr class="border-b border-outline-variant"><td class="p-3">16</td><td class="p-3">8</td><td class="p-3">uint64</td><td class="p-3 text-primary">capacity</td></tr>
+                                        <tr class="border-b border-outline-variant"><td class="p-3">24</td><td class="p-3">4</td><td class="p-3">uint32</td><td class="p-3 text-primary">write_seq</td></tr>
+                                        <tr class="border-b border-outline-variant"><td class="p-3">28</td><td class="p-3">4</td><td class="p-3">uint32</td><td class="p-3 text-primary">flags</td></tr>
+                                        <tr class="border-b border-outline-variant"><td class="p-3">32</td><td class="p-3">4</td><td class="p-3">uint32</td><td class="p-3 text-primary">protocol_version</td></tr>
+                                        <tr><td class="p-3">36</td><td class="p-3">4</td><td class="p-3">uint32</td><td class="p-3 text-primary">checksum <span class="text-outline">CRC32</span></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+                </article>
+            </div>
+
+            <footer class="w-full p-4 text-center mt-auto bg-surface border-t border-outline-variant">
+                <p class="font-body-sm text-on-surface-variant">
+                    © 2026 <a href="https://bio.galtech.cc" target="_blank" rel="noopener noreferrer" class="hover:text-primary">Maxence MOREAU</a>
+                    · <span data-en="Part of the <a href=&quot;https://galtechdev.github.io/easysync/&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot; class=&quot;text-primary hover:underline&quot;>EasySync</a> ecosystem"
+                        data-fr="Membre de l'écosystème <a href=&quot;https://galtechdev.github.io/easysync/&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot; class=&quot;text-primary hover:underline&quot;>EasySync</a>">Membre de l'écosystème <a href="https://galtechdev.github.io/easysync/" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">EasySync</a></span>
                 </p>
-                <div class="terminal">
-                    <div class="terminal-body">
-                        arr = shm.<span class="func">as_ndarray</span>(shape=(<span class="num">1920</span>, <span class="num">1080</span>, <span class="num">3</span>), dtype=<span class="str">'uint8'</span>)<br>
-                        arr[:] = <span class="num">255</span> <span class="comment"># Instantly white screen for all processes!</span>
-                    </div>
-                </div>
-            </section>
-
-            <section id="signaling" class="wiki-section">
-                <h2 data-en="Process Signaling" data-fr="Signalisation Inter-processus">Process Signaling</h2>
-                <p data-en="Instead of polling the memory, you can wait for a wake-up signal from another process."
-                   data-fr="Au lieu de scruter la mémoire en boucle, vous pouvez attendre un signal de réveil d'un autre processus.">
-                    Instead of polling, wait for a signal.
-                </p>
-                <div class="terminal">
-                    <div class="terminal-body">
-                        <span class="kw">if</span> shm.<span class="func">wait_update</span>(timeout=<span class="num">5.0</span>):<br>
-                        &nbsp;&nbsp;&nbsp;&nbsp;print(<span class="str">"Data updated!"</span>)
-                    </div>
-                </div>
-            </section>
-
-            <!-- ADVANCED VIEWS -->
-            <section id="views" class="wiki-section">
-                <h2 data-en="Advanced Views (Extensible Registry)" data-fr="Vues Avancées (Registre Extensible)">Advanced Views</h2>
-                <p data-en="The <code>as_view()</code> system allows you to map complex Python objects directly over the shared memory segment without any copy."
-                   data-fr="Le système <code>as_view()</code> vous permet de mapper des objets Python complexes directement sur le segment de mémoire partagée sans aucune copie.">
-                    Map complex Python objects directly over shared memory.
-                </p>
-                
-                <h3 data-en="Why use SHM?" data-fr="Pourquoi utiliser le SHM ?">Why use SHM?</h3>
-                <table class="perf-table">
-                    <thead>
-                        <tr>
-                            <th data-en="Feature" data-fr="Fonctionnalité">Feature</th>
-                            <th>TCP Network</th>
-                            <th>EasySHM</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td data-en="Baseline Latency" data-fr="Latence de base">Baseline Latency</td>
-                            <td>~1.0ms - 2.0ms</td>
-                            <td class="perf-val">&lt; 0.08ms</td>
-                        </tr>
-                        <tr>
-                            <td data-en="10MB Sync" data-fr="Sync de 10Mo">10MB Sync</td>
-                            <td>~0.10s</td>
-                            <td class="perf-val">~0.07s</td>
-                        </tr>
-                        <tr>
-                            <td data-en="CPU Usage" data-fr="Usage CPU">CPU Usage</td>
-                            <td>Moderate (TCP Stack)</td>
-                            <td class="perf-val">Near-Zero</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <h3 data-en="Supported Types" data-fr="Types Supportés">Supported Types</h3>
-                <ul>
-                    <li><strong>numpy</strong>: Multi-dimensional arrays (Zero-Copy).</li>
-                    <li><strong>struct</strong>: C-style <code>ctypes.Structure</code>.</li>
-                    <li><strong>torch</strong>: CPU Tensors for AI workloads.</li>
-                </ul>
-
-                <h3 data-en="Custom C-Structure Example" data-fr="Exemple Structure C Personnalisée">Custom C-Structure Example</h3>
-                <div class="terminal">
-                    <div class="terminal-body">
-                        <span class="kw">class</span> Player(ctypes.Structure):<br>
-                        &nbsp;&nbsp;&nbsp;&nbsp;_fields_ = [(<span class="str">"x"</span>, ctypes.c_int), (<span class="str">"y"</span>, ctypes.c_int)]<br><br>
-                        p = shm.<span class="func">as_view</span>(<span class="str">"struct"</span>, type=Player)<br>
-                        p.x = <span class="num">100</span>
-                    </div>
-                </div>
-            </section>
-
-            <!-- WINDOWS SECTION -->
-            <section id="windows" class="wiki-section">
-                <h2 data-en="Windows Implementation" data-fr="Implémentation Windows">Windows Implementation</h2>
-                <p data-en="On Windows, EasySHM uses Named Events stored in the 'Local\\' session namespace. This allows communication between processes without admin rights."
-                   data-fr="Sur Windows, EasySHM utilise des 'Named Events' stockés dans l'espace de session 'Local\\'. Cela permet de communiquer sans droits administrateur.">
-                    On Windows, EasySHM uses Named Events in the 'Local\\' session namespace.
-                </p>
-                <div class="doc-alert">
-                    <i class="ri-windows-fill"></i>
-                    <span data-en="Signals are broadcast using PulseEvent, waking all waiting processes simultaneously."
-                          data-fr="Les signaux sont diffusés via PulseEvent, réveillant tous les processus en attente simultanément.">
-                        Signals are broadcast using PulseEvent.
-                    </span>
-                </div>
-            </section>
-
-            <!-- LINUX SECTION -->
-            <section id="linux" class="wiki-section">
-                <h2 data-en="Linux Implementation" data-fr="Implémentation Linux">Linux Implementation</h2>
-                <p data-en="On Linux, EasySHM creates memory-mapped files in <code>/dev/shm</code> (Shared Memory File System). It uses POSIX Semaphores for ultra-fast signaling."
-                   data-fr="Sur Linux, EasySHM crée des fichiers mappés en mémoire dans <code>/dev/shm</code>. Il utilise des Sémaphores POSIX pour une signalisation ultra-rapide.">
-                    EasySHM uses /dev/shm and POSIX Semaphores on Linux.
-                </p>
-                <div class="doc-alert doc-alert-tip">
-                    <i class="ri-terminal-window-line"></i>
-                    <span data-en="Tip: You can manually inspect shared segments by browsing to /dev/shm on your Linux machine."
-                          data-fr="Astuce : Vous pouvez inspecter manuellement les segments partagés en parcourant /dev/shm sur votre machine Linux.">
-                        You can manually inspect shared segments in /dev/shm.
-                    </span>
-                </div>
-            </section>
+            </footer>
         </main>
     </div>
 
-    <footer class="footer">
-        <div class="container">
-            <p class="footer-text">EasySHM — High-Performance Computing by GalTechDev</p>
-        </div>
-    </footer>
-
-    <script>
-        let currentLang = "en";
-        function toggleLang() {
-            currentLang = currentLang === "en" ? "fr" : "en";
-            document.getElementById("lang-btn").textContent = currentLang === "en" ? "FR" : "EN";
-            document.querySelectorAll("[data-en]").forEach(el => {
-                const text = el.getAttribute("data-" + currentLang);
-                if (text) el.innerHTML = text;
-            });
-        }
-    </script>
+    <script src="js/app.js"></script>
 </body>
+
 </html>

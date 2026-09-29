@@ -172,6 +172,28 @@ def test_metadata():
         shm.destroy()
 
 
+def test_wait_update_no_missed_writes():
+    """A write made between two wait_update() calls must not be missed,
+    and an instance must not be woken up by its own writes."""
+    a = EasySHM("test_wait_seq", size=256)
+    b = EasySHM("test_wait_seq")
+    try:
+        a.write(b"1")                      # before b waits
+        assert b.wait_update(timeout=1.0), "Write made before wait_update() was missed"
+        assert not b.wait_update(timeout=0.2), "Same write reported twice"
+
+        b.write(b"own")                    # b's own write
+        assert not b.wait_update(timeout=0.2), "Woken up by its own write"
+
+        a.write(b"2")
+        b.write(b"3")                      # a's write is still unreported
+        assert b.wait_update(timeout=1.0), "Foreign write hidden by a later own write"
+        print("[PASS] test_wait_update_no_missed_writes")
+    finally:
+        b.close()
+        a.close()
+
+
 if __name__ == "__main__":
     print(f"Running EasySHM tests on {sys.platform}...\n")
     test_create_and_write()
@@ -183,4 +205,5 @@ if __name__ == "__main__":
     test_signal_notification()
     test_numpy_integration()
     test_metadata()
+    test_wait_update_no_missed_writes()
     print(f"\n{'='*40}\nAll tests passed!")

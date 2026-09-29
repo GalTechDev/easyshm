@@ -3,6 +3,8 @@ import sys
 import time
 import subprocess
 import signal
+
+from helpers import child_env
 from easyshm import EasySHM, LockAbandonedError
 
 def test_mutex_abandonment_recovery():
@@ -34,7 +36,7 @@ try:
 except Exception as e:
     with open('{sync_file}', 'w') as f: f.write(str(e))
 """
-    p = subprocess.Popen([sys.executable, "-c", code], env=os.environ.copy())
+    p = subprocess.Popen([sys.executable, "-c", code], env=child_env())
     
     # Wait for it to have the lock
     for _ in range(50):
@@ -66,7 +68,7 @@ except Exception as e:
     print("\nTesting with auto_recover=False...")
     # Re-create the scenario
     if os.path.exists(sync_file): os.unlink(sync_file)
-    p = subprocess.Popen([sys.executable, "-c", code], env=os.environ.copy())
+    p = subprocess.Popen([sys.executable, "-c", code], env=child_env())
     for _ in range(50):
         if os.path.exists(sync_file): break
         time.sleep(0.1)

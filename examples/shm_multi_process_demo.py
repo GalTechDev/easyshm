@@ -14,8 +14,9 @@ def writer_process():
     shm = EasySHM("demo_shared", size=1024)
     
     # On crée un tableau numpy mappé sur la SHM
-    arr = shm.as_ndarray(shape=(5,), dtype='int32')
-    
+    arr = shm.as_view("numpy", shape=(5,), dtype='int32')
+    time.sleep(0.5)  # Laisse le lecteur se connecter avant la première écriture
+
     for i in range(5):
         val = (i + 1) * 10
         print(f"[Writer] Écriture de {val} à l'index {i}...")
@@ -32,16 +33,17 @@ def reader_process():
     shm = EasySHM("demo_shared")
     
     # On mappe le même segment
-    arr = shm.as_ndarray(shape=(5,), dtype='int32')
+    arr = shm.as_view("numpy", shape=(5,), dtype='int32')
     
-    updates_seen = 0
-    while updates_seen < 5:
+    # On s'arrête quand la dernière valeur est arrivée (un réveil peut regrouper
+    # plusieurs écritures, on ne compte donc pas les signaux)
+    deadline = time.time() + 15
+    while arr[4] != 50 and time.time() < deadline:
         # On attend le signal noyau (bloquant, 0% CPU)
         if shm.wait_update(timeout=2.0):
             print(f"[Reader] Signal reçu ! Contenu actuel : {arr}")
-            updates_seen += 1
-            
-    print("[Reader] Terminé.")
+
+    print("[Reader] Terminé." if arr[4] == 50 else "[Reader] Abandon : données incomplètes.")
     shm.close()
 
 if __name__ == "__main__":

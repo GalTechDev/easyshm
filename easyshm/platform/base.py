@@ -22,11 +22,14 @@ class Signal(ABC):
         """Signal all waiting processes. Non-blocking."""
 
     @abstractmethod
-    def wait(self, timeout_ms: int = None) -> bool:
+    def wait(self, timeout_ms: int = None, expected: int = None) -> bool:
         """Block until signaled or timeout.
 
         Args:
             timeout_ms: Max wait time in milliseconds. None = wait forever.
+            expected:   Last write_seq seen by the caller. Implementations that
+                        watch the sequence word itself (futex) return at once
+                        if it already changed; others ignore it.
 
         Returns:
             True if signaled, False if timed out.
@@ -65,7 +68,7 @@ class Mutex(ABC):
         Returns:
             True: Success.
             False: Timeout / Failure.
-            "abandoned": Success, but the previous owner crashed (Windows).
+            "abandoned": Success, but the previous owner crashed while holding it.
         """
 
     @abstractmethod
@@ -75,6 +78,9 @@ class Mutex(ABC):
     @abstractmethod
     def close(self):
         """Release OS resources."""
+
+    def destroy(self):
+        """Delete the OS object backing the lock (no-op where the OS refcounts it)."""
 
     def __enter__(self):
         res = self.acquire()

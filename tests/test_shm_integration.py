@@ -10,7 +10,8 @@ import time
 import sys
 import os
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from helpers import require_easysync
+require_easysync()
 
 from easysync import shm_connect, SyncedObject
 
@@ -85,6 +86,7 @@ def process_reader(ready_event, done_event):
 
     done_event.set()
     client.close()
+    sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
     # Cleanup previous runs
@@ -112,3 +114,5 @@ if __name__ == "__main__":
     
     if p1.is_alive(): p1.terminate()
     if p2.is_alive(): p2.terminate()
+    if p2.exitcode != 0:
+        sys.exit(1)

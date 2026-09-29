@@ -67,7 +67,7 @@ class Win32Signal(Signal):
             _k32.ResetEvent(self._handle)
 
 
-    def wait(self, timeout_ms: int = None) -> bool:
+    def wait(self, timeout_ms: int = None, expected: int = None) -> bool:
         """Block until the event is signaled or timeout expires.
 
         Returns True if signaled, False on timeout.
