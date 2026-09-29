@@ -1,5 +1,4 @@
 # EasySHM
-# EasySHM
 
 **High-Performance Shared Memory IPC for Python.**
 
