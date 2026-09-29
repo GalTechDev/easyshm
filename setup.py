@@ -16,7 +16,7 @@ setup(
         "Topic :: System :: Networking",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     install_requires=[
         "numpy>=1.20.0", # Highly recommended for SHM
     ],
